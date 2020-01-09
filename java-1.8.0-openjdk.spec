@@ -41,7 +41,8 @@
 %global build_loop2 %{nil}
 %endif
 
-# if you disable both builds, then build fails
+# if you disable both builds, then the build fails
+# Note that the debug build requires the normal build for docs
 %global build_loop  %{build_loop1} %{build_loop2}
 # note, that order  normal_suffix debug_suffix, in case of both enabled,
 # is expected in one single case at the end of build
@@ -54,10 +55,12 @@
 %endif
 
 %if %{bootstrap_build}
-%global targets bootcycle-images docs
+%global release_targets bootcycle-images docs
 %else
-%global targets all
+%global release_targets images docs
 %endif
+# No docs nor bootcycle for debug builds
+%global debug_targets images
 
 # Filter out flags from the optflags macro that cause problems with the OpenJDK build
 # We filter out -O flags so that the optimisation of HotSpot is not lowered from O3 to O2
@@ -155,7 +158,7 @@
 # note, following three variables are sedded from update_sources if used correctly. Hardcode them rather there.
 %global shenandoah_project	aarch64-port
 %global shenandoah_repo		jdk8u-shenandoah
-%global shenandoah_revision    	aarch64-shenandoah-jdk8u212-b04
+%global shenandoah_revision    	aarch64-shenandoah-jdk8u222-b10
 # Define old aarch64/jdk8u tree variables for compatibility
 %global project         %{shenandoah_project}
 %global repo            %{shenandoah_repo}
@@ -167,6 +170,23 @@
 %global updatever       %(VERSION=%{whole_update}; echo ${VERSION##*u})
 # eg jdk8u60-b27 -> b27
 %global buildver        %(VERSION=%{revision}; echo ${VERSION##*-})
+%global rpmrelease      0
+# Define milestone (EA for pre-releases, GA ("fcs") for releases)
+# Release will be (where N is usually a number starting at 1):
+# - 0.N%%{?extraver}%%{?dist} for EA releases,
+# - N%%{?extraver}{?dist} for GA releases
+%global is_ga           1
+%if %{is_ga}
+%global milestone          fcs
+%global milestone_version  %{nil}
+%global extraver %{nil}
+%global eaprefix %{nil}
+%else
+%global milestone          ea
+%global milestone_version  "-ea"
+%global extraver .%{milestone}
+%global eaprefix 0.
+%endif
 # priority must be 7 digits in total. The expression is workarounding tip
 %global priority        %(TIP=1800%{updatever};  echo ${TIP/tip/999})
 
@@ -752,7 +772,7 @@ Requires: %{name}-headless%1 = %{epoch}:%{version}-%{release}
 
 Name:    java-%{javaver}-%{origin}
 Version: %{javaver}.%{updatever}.%{buildver}
-Release: 0%{?dist}
+Release: %{?eaprefix}%{rpmrelease}%{?extraver}%{?dist}
 # java-1.5.0-ibm from jpackage.org set Epoch to 1 for unknown reasons
 # and this change was brought into RHEL-4. java-1.5.0-ibm packages
 # also included the epoch in their virtual provides. This created a
@@ -919,10 +939,6 @@ Patch203: jdk8042159-allow_using_system_installed_lcms2.patch
 # S8074839, PR2462: Resolve disabled warnings for libunpack and the unpack200 binary
 # This fixes printf warnings that lead to build failure with -Werror=format-security from optflags
 Patch502: pr2462-resolve_disabled_warnings_for_libunpack_and_the_unpack200_binary.patch
-# 8171000, PR3542, RH1402819: Robot.createScreenCapture() crashes in wayland mode
-Patch563: jdk8171000-pr3542-rh1402819-robot_createScreenCapture_crashes_in_wayland_mode.patch
-# 8197546, PR3542, RH1402819: Fix for 8171000 breaks Solaris + Linux builds
-Patch564: jdk8197546-pr3542-rh1402819-fix_for_8171000_breaks_solaris_linux_builds.patch
 # PR3591: Fix for bug 3533 doesn't add -mstackrealign to JDK code
 Patch571: jdk8199936-pr3591-enable_mstackrealign_on_x86_linux_as_well_as_x86_mac_os_x_jdk.patch
 
@@ -955,10 +971,6 @@ Patch201: jdk8043805-allow_using_system_installed_libjpeg.patch
 # and should be upstreamed to the appropriate
 # trees.
 #############################################
-
-# Shenandoah fixes
-# PR3634: Shenandoah still broken on s390 with aarch64-shenandoah-jdk8u181-b16
-Patch582: pr3634-fix_shenandoah_for_size_t_on_s390.patch
 
 #############################################
 #
@@ -1157,8 +1169,6 @@ BuildArch: noarch
 The OpenJDK API documentation %{for_debug}.
 %endif
 
-
-
 %prep
 if [ %{include_normal_build} -eq 0 -o  %{include_normal_build} -eq 1 ] ; then
   echo "include_normal_build is %{include_normal_build}"
@@ -1176,6 +1186,14 @@ if [ %{include_debug_build} -eq 0 -a  %{include_normal_build} -eq 0 ] ; then
   echo "you have disabled both include_debug_build and include_debug_build. no go."
   exit 13
 fi
+if [ %{include_normal_build} -eq 0 ] ; then
+  echo "You have disabled the normal build, but this is required to provide docs for the debug build."
+  exit 14
+fi
+
+echo "Update version: %{updatever}"
+echo "Build number: %{buildver}"
+echo "Milestone: %{milestone}"
 %setup -q -c -n %{uniquesuffix ""} -T -a 0
 # https://bugzilla.redhat.com/show_bug.cgi?id=1189084
 prioritylength=`expr length %{priority}`
@@ -1236,8 +1254,6 @@ sh %{SOURCE12}
 %patch519
 %patch529
 %patch531
-%patch563
-%patch564
 %patch571
 %patch541
 
@@ -1250,7 +1266,6 @@ sh %{SOURCE12}
 %endif
 
 # Shenandoah patches
-%patch582
 
 # Extract systemtap tapsets
 %if %{with_systemtap}
@@ -1346,8 +1361,8 @@ bash ../../configure \
 %ifnarch %{jit_arches}
     --with-jvm-variants=zero \
 %endif
-    --disable-zip-debug-info \
-    --with-milestone="fcs" \
+    --with-native-debug-symbols=internal \
+    --with-milestone=%{milestone} \
     --with-update-version=%{updatever} \
     --with-build-number=%{buildver} \
     --with-boot-jdk=/usr/lib/jvm/java-openjdk \
@@ -1368,18 +1383,16 @@ bash ../../configure \
 cat spec.gmk
 cat hotspot-spec.gmk
 
-# The combination of FULL_DEBUG_SYMBOLS=0 and ALT_OBJCOPY=/does_not_exist
-# disables FDS for all build configs and reverts to pre-FDS make logic.
-# STRIP_POLICY=none says don't do any stripping. DEBUG_BINARIES=true says
-# ignore all the other logic about which debug options and just do '-g'.
-
+# Debug builds don't need same targets as release for
+# build speed-up
+maketargets="%{release_targets}"
+if echo $debugbuild | grep -q "debug" ; then
+  maketargets="%{debug_targets}"
+fi
 make \
-    DEBUG_BINARIES=true \
     JAVAC_FLAGS=-g \
-    STRIP_POLICY=no_strip \
-    POST_STRIP_CMD="" \
     LOG=trace \
-    %{targets} || ( pwd; find $top_dir_abs_path -name "hs_err_pid*.log" | xargs cat && false )
+    $maketargets || ( pwd; find $top_dir_abs_path -name "hs_err_pid*.log" | xargs cat && false )
 
 # the build (erroneously) removes read permissions from some jars
 # this is a regression in OpenJDK 7 (our compiler):
@@ -1556,10 +1569,10 @@ mkdir -p $RPM_BUILD_ROOT%{_jvmdir}/%{jredir $suffix}/lib/%{archinstall}/client/
 
 popd
 
-
 # Install Javadoc documentation.
+# Always take docs from normal build to avoid building them twice
 install -d -m 755 $RPM_BUILD_ROOT%{_javadocdir}
-cp -a %{buildoutputdir $suffix}/docs $RPM_BUILD_ROOT%{_javadocdir}/%{uniquejavadocdir $suffix}
+cp -a %{buildoutputdir $normal_suffix}/docs $RPM_BUILD_ROOT%{_javadocdir}/%{uniquejavadocdir $suffix}
 
 # Install icons and menu entries.
 for s in 16 24 32 48 ; do
@@ -1757,6 +1770,7 @@ require "copy_jdk_configs.lua"
 
 %postun javadoc-debug
 %{postun_javadoc -- %{debug_suffix_unquoted}}
+
 %endif
 
 %if %{include_normal_build}
@@ -1806,10 +1820,77 @@ require "copy_jdk_configs.lua"
 
 %files javadoc-debug
 %{files_javadoc -- %{debug_suffix_unquoted}}
+
 %endif
 
 %changelog
-* Thu Apr 11 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.212.b04-1
+* Thu Jul 11 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.222.b10-0
+- Update to aarch64-shenandoah-jdk8u222-b10.
+- Resolves: rhbz#1724452
+
+* Tue Jul 09 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.222.b09-0
+- Update to aarch64-shenandoah-jdk8u222-b09.
+- Switch to GA mode for final release.
+- Resolves: rhbz#1724452
+
+* Tue Jul 09 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.222.b08-0.0.ea
+- Update to aarch64-shenandoah-jdk8u222-b08.
+- Resolves: rhbz#1724452
+
+* Mon Jul 08 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.222.b07-0.0.ea
+- Update to aarch64-shenandoah-jdk8u222-b07 and Shenandoah merge 2019-06-13.
+- Resolves: rhbz#1724452
+
+* Mon Jul 08 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.222.b06-0.0.ea
+- Update to aarch64-shenandoah-jdk8u222-b06.
+- Resolves: rhbz#1724452
+
+* Mon Jul 08 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.222.b05-0.0.ea
+- Update to aarch64-shenandoah-jdk8u222-b05.
+- Resolves: rhbz#1724452
+
+* Mon Jul 08 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.222.b04-0.0.ea
+- Update to aarch64-shenandoah-jdk8u222-b04.
+- Resolves: rhbz#1724452
+
+* Mon Jul 08 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.222.b03-0.1.ea
+- Restore docs make target so docs are built again.
+- Resolves: rhbz#1724452
+
+* Mon Jul 08 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.222.b03-0.1.ea
+- Remove zip-docs make target as RHEL 6.10 RPM does not have that patch.
+- Resolves: rhbz#1724452
+
+* Mon Jul 08 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.222.b03-0.1.ea
+- Provide Javadoc debug subpackage for now, but populate it from the normal build.
+- Resolves: rhbz#1724452
+
+* Mon Jul 08 2019 Severin Gehwolf <sgehwolf@redhat.com> - 1:1.8.0.222.b03-0.1.ea
+- Don't produce javadoc sub package for the debug variant build.
+- Don't perform a bootcycle build for the debug variant build.
+- Resolves: rhbz#1724452
+
+* Tue Jul 02 2019 Severin Gehwolf <sgehwolf@redhat.com> - 1:1.8.0.222.b03-0.0.ea
+- Include 'ea' designator in Release when appropriate.
+- Use --with-native-debug-symbols=internal which JDK-8036003 adds.
+- Resolves: rhbz#1724452
+
+* Wed May 22 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.222.b03-0
+- Update to aarch64-shenandoah-jdk8u222-b03.
+- Handle milestone as variables so we can alter it easily and set the docs zip filename appropriately.
+- Resolves: rhbz#1724452
+
+* Mon May 13 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.222.b02-0
+- Update to aarch64-shenandoah-jdk8u222-b02.
+- Resolves: rhbz#1724452
+
+* Thu May 02 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.222.b01-0
+- Update to aarch64-shenandoah-jdk8u222-b01.
+- Drop 8171000, 8197546 & PR3634 as applied upstream.
+- Adjust 8214206 fix for S390 as BinaryMagnitudeSeq moved to shenandoahNumberSeq.cpp
+- Resolves: rhbz#1724452
+
+* Thu Apr 11 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.212.b04-0
 - Update to aarch64-shenandoah-jdk8u212-b04.
 - Resolves: rhbz#1693468
 
