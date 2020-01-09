@@ -674,7 +674,7 @@ Requires(post):   %{_sbindir}/alternatives
 # Postun requires alternatives to uninstall tool alternatives.
 Requires(postun): %{_sbindir}/alternatives
 # for optional support of kernel stream control, card reader and printing bindings
-Requires: lksctp-tools%{?_isa}, pcsc-lite-devel%{?_isa}, cups-libs%{?_isa}
+Requires: lksctp-tools%{?_isa}, pcsc-lite-libs%{?_isa}, cups-libs%{?_isa}
 
 # Standard JPackage base provides.
 Provides: jre-%{javaver}-%{origin}-headless%1 = %{epoch}:%{version}-%{release}
@@ -752,7 +752,7 @@ Requires: %{name}-headless%1 = %{epoch}:%{version}-%{release}
 
 Name:    java-%{javaver}-%{origin}
 Version: %{javaver}.%{updatever}.%{buildver}
-Release: 1%{?dist}
+Release: 2%{?dist}
 # java-1.5.0-ibm from jpackage.org set Epoch to 1 for unknown reasons
 # and this change was brought into RHEL-4. java-1.5.0-ibm packages
 # also included the epoch in their virtual provides. This created a
@@ -878,6 +878,7 @@ Patch518: pr2934-sunec_provider_throwing_keyexception_withine.separator_current_
 Patch519: pr3479-rh1486025-sunec_provider_can_have_multiple_instances_leading_to_premature_nss_shutdown.patch
 # RH1566890: CVE-2018-3639
 Patch529: rh1566890_speculative_store_bypass_so_added_more_per_task_speculation_control_CVE_2018_3639.patch
+Patch541: rh1684077-openjdk_should_depend_on_pcsc-lite-libs_instead_of_pcsc-lite-devel.patch
 
 #############################################
 #
@@ -1268,6 +1269,7 @@ sh %{SOURCE12}
 %patch572
 %patch586
 %patch587
+%patch541
 
 # RPM-only fixes
 %patch525
@@ -1837,6 +1839,10 @@ require "copy_jdk_configs.lua"
 %endif
 
 %changelog
+* Thu Feb 28 2019 Jiri Vanek jvanek@redhat.com - 1:1.8.0.201.b09-2
+- Replaced pcsc-lite-devel (which is in optional channel) with pcsc-lite-libs.
+- added rh1684077-openjdk_should_depend_on_pcsc-lite-libs_instead_of_pcsc-lite-devel.patch to make jdk work with pcsc
+
 * Wed Jan 16 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.201.b09-0
 - Update to aarch64-shenandoah-jdk8u201-b09.
 - Resolves: rhbz#1661577
