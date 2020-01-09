@@ -155,7 +155,7 @@
 # note, following three variables are sedded from update_sources if used correctly. Hardcode them rather there.
 %global shenandoah_project	aarch64-port
 %global shenandoah_repo		jdk8u-shenandoah
-%global shenandoah_revision    	aarch64-shenandoah-jdk8u201-b09
+%global shenandoah_revision    	aarch64-shenandoah-jdk8u212-b04
 # Define old aarch64/jdk8u tree variables for compatibility
 %global project         %{shenandoah_project}
 %global repo            %{shenandoah_repo}
@@ -752,7 +752,7 @@ Requires: %{name}-headless%1 = %{epoch}:%{version}-%{release}
 
 Name:    java-%{javaver}-%{origin}
 Version: %{javaver}.%{updatever}.%{buildver}
-Release: 2%{?dist}
+Release: 0%{?dist}
 # java-1.5.0-ibm from jpackage.org set Epoch to 1 for unknown reasons
 # and this change was brought into RHEL-4. java-1.5.0-ibm packages
 # also included the epoch in their virtual provides. This created a
@@ -877,7 +877,9 @@ Patch517: pr2899-dont_use_withseed_versions_of_nss_functions_as_they_dont_fully_
 Patch518: pr2934-sunec_provider_throwing_keyexception_withine.separator_current_nss_thus_initialise_the_random_number_generator_and_feed_the_seed_to_it.patch
 Patch519: pr3479-rh1486025-sunec_provider_can_have_multiple_instances_leading_to_premature_nss_shutdown.patch
 # RH1566890: CVE-2018-3639
-Patch529: rh1566890_speculative_store_bypass_so_added_more_per_task_speculation_control_CVE_2018_3639.patch
+Patch529: rh1566890-CVE_2018_3639-speculative_store_bypass.patch
+Patch531: rh1566890-CVE_2018_3639-speculative_store_bypass_toggle.patch
+# JDK-8009550, RH910107: PlatformPCSC should load versioned so
 Patch541: rh1684077-openjdk_should_depend_on_pcsc-lite-libs_instead_of_pcsc-lite-devel.patch
 
 #############################################
@@ -897,10 +899,8 @@ Patch102: jdk8203030-zero_s390_31_bit_size_t_type_conflicts_in_shared_code.patch
 Patch103: pr3593-s390_use_z_format_specifier_for_size_t_arguments_as_size_t_not_equals_to_int.patch
 # x86: S8199936, PR3533: HotSpot generates code with unaligned stack, crashes on SSE operations (-mstackrealign workaround)
 Patch105: jdk8199936-pr3533-enable_mstackrealign_on_x86_linux_as_well_as_x86_mac_os_x.patch
-# AArch64: JDK-8160748: [AArch64] Inconsistent types for ideal_reg
-Patch107: jdk8160748-aarch64_ideal_reg.patch
-# AArch64: JDK-8189170: [AArch64] Add option to disable stack overflow checking in primordial thread for use with JNI_CreateJavaJVM
-Patch108: jdk8189170-aarch64_primordial_thread.patch
+# S390 ambiguous log2_intptr calls
+Patch107: s390-8214206_fix.patch
 
 #############################################
 #
@@ -919,38 +919,22 @@ Patch203: jdk8042159-allow_using_system_installed_lcms2.patch
 # S8074839, PR2462: Resolve disabled warnings for libunpack and the unpack200 binary
 # This fixes printf warnings that lead to build failure with -Werror=format-security from optflags
 Patch502: pr2462-resolve_disabled_warnings_for_libunpack_and_the_unpack200_binary.patch
-# 8197429, PR3546, RH153662{2,3}: 32 bit java app started via JNI crashes with larger stack sizes
-Patch561: jdk8197429-pr3546-rh1536622-increased_stack_guard_causes_segfaults_on_x86_32.patch
 # 8171000, PR3542, RH1402819: Robot.createScreenCapture() crashes in wayland mode
 Patch563: jdk8171000-pr3542-rh1402819-robot_createScreenCapture_crashes_in_wayland_mode.patch
 # 8197546, PR3542, RH1402819: Fix for 8171000 breaks Solaris + Linux builds
 Patch564: jdk8197546-pr3542-rh1402819-fix_for_8171000_breaks_solaris_linux_builds.patch
-# PR3559: Use ldrexd for atomic reads on ARMv7.
-Patch567: pr3559-use_ldrexd_for_atomic_reads_on_armv7_zero.patch
 # PR3591: Fix for bug 3533 doesn't add -mstackrealign to JDK code
 Patch571: jdk8199936-pr3591-enable_mstackrealign_on_x86_linux_as_well_as_x86_mac_os_x_jdk.patch
-# 8184309, PR3596: Build warnings from GCC 7.1 on Fedora 26
-Patch572: jdk8184309-pr3596-build_warnings_from_gcc_7_1_on_fedora_26.patch
 
 #############################################
 #
-# Patches appearing in 8u202
+# Patches appearing in 8u222
 #
 # This section includes patches which are present
 # in the listed OpenJDK 8u release and should be
 # able to be removed once that release is out
 # and used by this RPM.
 #############################################
-# S8073139, RH1191652; fix name of ppc64le architecture
-Patch601: jdk8073139-pr1758-rh1191652-ppc64_le_says_its_arch_is_ppc64_not_ppc64le_root.patch
-Patch602: jdk8073139-pr1758-rh1191652-ppc64_le_says_its_arch_is_ppc64_not_ppc64le_jdk.patch
-Patch603: jdk8073139-pr2236-rh1191652-use_ppc64le_as_the_arch_directory_on_that_platform_and_report_it_in_os_arch_aarch64_forest.patch
-# 8044235: src.zip should include all sources
-Patch7:   jdk8044235-src_zip_should_include_all_sources.patch
-# JDK-8131048, PR3574, RH1498936: ppc implement CRC32 intrinsic
-Patch586: jdk8131048-pr3574-rh1498936-ppc_crc32.patch
-# JDK-8164920, PR3574, RH1498936: ppc: enhancement of CRC32 intrinsic
-Patch587: jdk8164920-pr3574-rh1498936-ppc_crc32_enhancement.patch
 
 #############################################
 #
@@ -1224,26 +1208,16 @@ sh %{SOURCE12}
 %patch202
 %patch203
 
-
 %patch1
 %patch5
-%patch7
 
 # s390 build fixes
 %patch102
 %patch103
-
-# AArch64 fixes
 %patch107
-%patch108
 
 # x86 fixes
 %patch105
-
-# ppc64le fixes
-%patch603
-%patch601
-%patch602
 
 # RHEL 6 fix
 %patch998
@@ -1261,14 +1235,10 @@ sh %{SOURCE12}
 %patch518
 %patch519
 %patch529
-%patch561
+%patch531
 %patch563
 %patch564
-%patch567
 %patch571
-%patch572
-%patch586
-%patch587
 %patch541
 
 # RPM-only fixes
@@ -1839,6 +1809,47 @@ require "copy_jdk_configs.lua"
 %endif
 
 %changelog
+* Thu Apr 11 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.212.b04-1
+- Update to aarch64-shenandoah-jdk8u212-b04.
+- Resolves: rhbz#1693468
+
+* Thu Apr 11 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.212.b03-0
+- Update to aarch64-shenandoah-jdk8u212-b03.
+- Resolves: rhbz#1693468
+
+* Tue Apr 09 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.212.b02-0
+- Update to aarch64-shenandoah-jdk8u212-b02.
+- Remove patches included upstream
+  - JDK-8197429/PR3546/RH153662{2,3}
+  - JDK-8184309/PR3596
+- Re-generate patches
+  - JDK-8203030
+- Add casts to resolve s390 ambiguity in calls to log2_intptr
+- Resolves: rhbz#1693468
+
+* Sun Apr 07 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.202.b08-0
+- Update to aarch64-shenandoah-jdk8u202-b08.
+- Remove patches included upstream
+  - JDK-8211387/PR3559
+  - JDK-8073139/PR1758/RH1191652
+  - JDK-8044235
+  - JDK-8131048/PR3574/RH1498936
+  - JDK-8164920/PR3574/RH1498936
+- Resolves: rhbz#1693468
+
+* Thu Apr 04 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.201.b13-0
+- Update to aarch64-shenandoah-jdk8u201-b13.
+- Drop JDK-8160748 & JDK-8189170 AArch64 patches now applied upstream.
+- Resolves: rhbz#1693468
+
+* Tue Apr 02 2019 Severin Gehwolf <sgehwolf@redhat.com> - 1:1.8.0.201.b09-3
+- Update patch for RH1566890.
+  - Renamed rh1566890_speculative_store_bypass_so_added_more_per_task_speculation_control_CVE_2018_3639 to
+    rh1566890-CVE_2018_3639-speculative_store_bypass.patch
+  - Added dependent patch,
+    rh1566890-CVE_2018_3639-speculative_store_bypass_toggle.patch
+- Resolves: rhbz#1693468
+
 * Thu Feb 28 2019 Jiri Vanek jvanek@redhat.com - 1:1.8.0.201.b09-2
 - Replaced pcsc-lite-devel (which is in optional channel) with pcsc-lite-libs.
 - added rh1684077-openjdk_should_depend_on_pcsc-lite-libs_instead_of_pcsc-lite-devel.patch to make jdk work with pcsc
