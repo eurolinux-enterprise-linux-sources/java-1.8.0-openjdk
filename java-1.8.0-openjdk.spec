@@ -151,26 +151,27 @@
 %global script 'use File::Spec; print File::Spec->abs2rel($ARGV[0], $ARGV[1])'
 %global abs2rel %{__perl} -e %{script}
 
-
 # Standard JPackage naming and versioning defines.
 %global origin          openjdk
 %global top_level_dir_name   %{origin}
 # note, following three variables are sedded from update_sources if used correctly. Hardcode them rather there.
 %global shenandoah_project	aarch64-port
 %global shenandoah_repo		jdk8u-shenandoah
-%global shenandoah_revision    	aarch64-shenandoah-jdk8u222-b10
+%global shenandoah_revision    	aarch64-shenandoah-jdk8u232-b09
 # Define old aarch64/jdk8u tree variables for compatibility
 %global project         %{shenandoah_project}
 %global repo            %{shenandoah_repo}
 %global revision        %{shenandoah_revision}
 
+# e.g. aarch64-shenandoah-jdk8u212-b04-shenandoah-merge-2019-04-30 -> aarch64-shenandoah-jdk8u212-b04
+%global version_tag     %(VERSION=%{revision}; echo ${VERSION%%-shenandoah-merge*})
 # eg # jdk8u60-b27 -> jdk8u60 or # aarch64-jdk8u60-b27 -> aarch64-jdk8u60  (dont forget spec escape % by %%)
-%global whole_update    %(VERSION=%{revision}; echo ${VERSION%%-*})
+%global whole_update    %(VERSION=%{version_tag}; echo ${VERSION%%-*})
 # eg  jdk8u60 -> 60 or aarch64-jdk8u60 -> 60
 %global updatever       %(VERSION=%{whole_update}; echo ${VERSION##*u})
 # eg jdk8u60-b27 -> b27
-%global buildver        %(VERSION=%{revision}; echo ${VERSION##*-})
-%global rpmrelease      0
+%global buildver        %(VERSION=%{version_tag}; echo ${VERSION##*-})
+%global rpmrelease      1
 # Define milestone (EA for pre-releases, GA ("fcs") for releases)
 # Release will be (where N is usually a number starting at 1):
 # - 0.N%%{?extraver}%%{?dist} for EA releases,
@@ -857,10 +858,6 @@ Source101: config.sub
 # Accessibility patches
 # Ignore AWTError when assistive technologies are loaded 
 Patch1:   rh1648242-accessible_toolkit_crash_do_not_break_jvm.patch
-# PR1834, RH1022017: Reduce curves reported by SSL to those in NSS
-# Not currently suitable to go upstream as it disables curves
-# for all providers unconditionally
-Patch525: pr1834-rh1022017-reduce_ellipticcurvesextension_to_provide_only_three_nss_supported_nist_curves_23_24_25.patch
 # Turn on AssumeMP by default on RHEL systems
 Patch534: rh1648246-always_instruct_vm_to_assume_multiple_processors_are_available.patch
 # Reduce autoconf version requirement to allow use on RHEL 6
@@ -1258,7 +1255,6 @@ sh %{SOURCE12}
 %patch541
 
 # RPM-only fixes
-%patch525
 
 # RHEL-only patches
 %if 0%{?rhel}
@@ -1824,6 +1820,30 @@ require "copy_jdk_configs.lua"
 %endif
 
 %changelog
+* Fri Oct 11 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.232.b09-0
+- Update to aarch64-shenandoah-jdk8u232-b09.
+- Switch to GA mode for final release.
+- Remove PR1834/RH1022017 which is now handled by JDK-8228825 upstream.
+- Resolves: rhbz#1753423
+
+* Tue Oct 01 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.232.b08-0.0.ea
+- Update to aarch64-shenandoah-jdk8u232-b08.
+- Resolves: rhbz#1753423
+
+* Tue Sep 17 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.232.b05-0.1.ea
+- Update to aarch64-shenandoah-jdk8u232-b05-shenandoah-merge-2019-09-09.
+- Update version logic to handle -shenandoah* tag suffix.
+- Resolves: rhbz#1753423
+
+* Thu Sep 05 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.232.b05-0.0.ea
+- Update to aarch64-shenandoah-jdk8u232-b05.
+- Resolves: rhbz#1753423
+
+* Fri Jul 26 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.232.b01-0.0.ea
+- Update to aarch64-shenandoah-jdk8u232-b01.
+- Switch to EA mode.
+- Resolves: rhbz#1753423
+
 * Thu Jul 11 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.222.b10-0
 - Update to aarch64-shenandoah-jdk8u222-b10.
 - Resolves: rhbz#1724452
