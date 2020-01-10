@@ -1,3 +1,8 @@
+# The -g flag says to use strip -g instead of full strip on DSOs or EXEs.
+# This fixes detailed NMT and other tools which need minimal debug info.
+# See: https://bugzilla.redhat.com/show_bug.cgi?id=1520879
+%global _find_debuginfo_opts -g
+
 # note: parametrized macros are order-sensitive (unlike not-parametrized) even with normal macros
 # also necessary when passing it as parameter to other macros. If not macro, then it is considered a switch
 %global debug_suffix_unquoted -debug
@@ -181,6 +186,8 @@
 %global project         %{shenandoah_project}
 %global repo            %{shenandoah_repo}
 %global revision        %{shenandoah_revision}
+# Define IcedTea version used for SystemTap tapsets and desktop files
+%global icedteaver      3.11.0
 
 # eg # jdk8u60-b27 -> jdk8u60 or # aarch64-jdk8u60-b27 -> aarch64-jdk8u60  (dont forget spec escape % by %%)
 %global whole_update    %(VERSION=%{revision}; echo ${VERSION%%-*})
@@ -188,7 +195,7 @@
 %global updatever       %(VERSION=%{whole_update}; echo ${VERSION##*u})
 # eg jdk8u60-b27 -> b27
 %global buildver        %(VERSION=%{revision}; echo ${VERSION##*-})
-%global rpmrelease      0
+%global rpmrelease      1
 # Define milestone (EA for pre-releases, GA ("fcs") for releases)
 # Release will be (where N is usually a number starting at 1):
 # - 0.N%%{?extraver}%%{?dist} for EA releases,
@@ -697,9 +704,6 @@ Requires: jpackage-utils
 Requires: tzdata-java >= 2015d
 # libsctp.so.1 is being `dlopen`ed on demand
 Requires: lksctp-tools%{?_isa}
-# there is a need to depend on the exact version of NSS
-Requires: nss%{?_isa} %{NSS_BUILDTIME_VERSION}
-Requires: nss-softokn%{?_isa} %{NSSSOFTOKN_BUILDTIME_VERSION}
 # tool to copy jdk's configs - should be Recommends only, but then only dnf/yum enforce it,
 # not rpm transaction and so no configs are persisted when pure rpm -u is run. It may be
 # considered as regression
@@ -870,11 +874,11 @@ Source0: %{shenandoah_project}-%{shenandoah_repo}-%{shenandoah_revision}.tar.xz
 # Custom README for -src subpackage
 Source2:  README.md
 
-# Use 'generate_tarballs.sh' to generate the following tarballs
+# Use 'icedtea_sync.sh' to update the following
 # They are based on code contained in the IcedTea project (3.x).
 
 # Systemtap tapsets. Zipped up to keep it small.
-Source8: systemtap-tapset-3.6.0pre02.tar.xz
+Source8: tapsets-icedtea-%{icedteaver}.tar.xz
 
 # Desktop files. Adapted from IcedTea
 Source9: jconsole.desktop.in
@@ -942,20 +946,6 @@ Patch529: rh1566890-CVE_2018_3639-speculative_store_bypass.patch
 Patch531: rh1566890-CVE_2018_3639-speculative_store_bypass_toggle.patch
 # PR3601: Fix additional -Wreturn-type issues introduced by 8061651
 Patch530: pr3601-fix_additional_Wreturn_type_issues_introduced_by_8061651_for_prims_jvm_cpp.patch
-# Support for building the SunEC provider with the system NSS installation
-# PR1983: Support using the system installation of NSS with the SunEC provider
-# PR2127: SunEC provider crashes when built using system NSS
-# PR2815: Race condition in SunEC provider with system NSS
-# PR2899: Don't use WithSeed versions of NSS functions as they don't fully process the seed
-# PR2934: SunEC provider throwing KeyException with current NSS
-# PR3479, RH1486025: ECC and NSS JVM crash
-Patch513: pr1983-rh1565658-support_using_the_system_installation_of_nss_with_the_sunec_provider_jdk8.patch
-Patch514: pr1983-rh1565658-support_using_the_system_installation_of_nss_with_the_sunec_provider_root8.patch
-Patch515: pr2127-sunec_provider_crashes_when_built_using_system_nss_thus_use_of_nss_memory_management_functions.patch
-Patch516: pr2815-race_condition_in_sunec_provider_with_system_nss_fix.patch
-Patch517: pr2899-dont_use_withseed_versions_of_nss_functions_as_they_dont_fully_process_the_seed.patch
-Patch518: pr2934-sunec_provider_throwing_keyexception_withine.separator_current_nss_thus_initialise_the_random_number_generator_and_feed_the_seed_to_it.patch
-Patch519: pr3479-rh1486025-sunec_provider_can_have_multiple_instances_leading_to_premature_nss_shutdown.patch
 # PR2888: OpenJDK should check for system cacerts database (e.g. /etc/pki/java/cacerts)
 # PR3575, RH1567204: System cacerts database handling should not affect jssecacerts
 Patch539: pr2888-openjdk_should_check_for_system_cacerts_database_eg_etc_pki_java_cacerts.patch
@@ -1103,8 +1093,6 @@ BuildRequires: libffi-devel
 BuildRequires: tzdata-java >= 2015d
 # Earlier versions have a bug in tree vectorization on PPC
 BuildRequires: gcc >= 4.8.3-8
-# Build requirements for SunEC system NSS support
-BuildRequires: nss-softokn-freebl-devel >= 3.16.1
 
 %if %{with_systemtap}
 BuildRequires: systemtap-sdt-devel
@@ -1373,13 +1361,6 @@ sh %{SOURCE12}
 %patch502
 %patch504
 %patch512
-%patch513
-%patch514
-%patch515
-%patch516
-%patch517
-%patch518
-%patch519
 %patch400
 %patch523
 %patch528
@@ -1407,7 +1388,7 @@ sh %{SOURCE12}
 
 # Extract systemtap tapsets
 %if %{with_systemtap}
-tar -x -I xz -f %{SOURCE8}
+tar --strip-components=1 -x -I xz -f %{SOURCE8}
 %if %{include_debug_build}
 cp -r tapset tapset%{debug_suffix}
 %endif
@@ -1415,7 +1396,7 @@ cp -r tapset tapset%{debug_suffix}
 
 for suffix in %{build_loop} ; do
   for file in "tapset"$suffix/*.in; do
-    OUTPUT_FILE=`echo $file | sed -e "s:%{javaver}\.stp\.in$:%{version}-%{release}.%{_arch}.stp:g"`
+    OUTPUT_FILE=`echo $file | sed -e "s:\.stp\.in$:-%{version}-%{release}.%{_arch}.stp:g"`
     sed -e "s:@ABS_SERVER_LIBJVM_SO@:%{_jvmdir}/%{sdkdir $suffix}/jre/lib/%{archinstall}/server/libjvm.so:g" $file > $file.1
 # TODO find out which architectures other than i686 have a client vm
 %ifarch %{ix86}
@@ -1432,16 +1413,19 @@ done
 %endif
 
 # Prepare desktop files
+# The _X_ syntax indicates variables that are replaced by make upstream
+# The @X@ syntax indicates variables that are replaced by configure upstream
 for suffix in %{build_loop} ; do
 for file in %{SOURCE9} %{SOURCE10} ; do
     FILE=`basename $file | sed -e s:\.in$::g`
     EXT="${FILE##*.}"
     NAME="${FILE%.*}"
     OUTPUT_FILE=$NAME$suffix.$EXT
-    sed    -e  "s:@JAVA_HOME@:%{sdkbindir $suffix}:g" $file > $OUTPUT_FILE
-    sed -i -e  "s:@JRE_HOME@:%{jrebindir $suffix}:g" $OUTPUT_FILE
-    sed -i -e  "s:@ARCH@:%{version}-%{release}.%{_arch}$suffix:g" $OUTPUT_FILE
-    sed -i -e  "s:@JAVA_MAJOR_VERSION@:%{javaver}:g" $OUTPUT_FILE
+    sed    -e  "s:_BINDIR_:%{sdkbindir -- $suffix}:g" $file > $OUTPUT_FILE
+    sed -i -e  "s:_JREBINDIR_:%{jrebindir -- $suffix}:g" $OUTPUT_FILE
+    sed -i -e  "s:@target_cpu@:%{_arch}:g" $OUTPUT_FILE
+    sed -i -e  "s:@OPENJDK_VER@:%{version}-%{release}$suffix:g" $OUTPUT_FILE
+    sed -i -e  "s:@JAVA_VER@:%{javaver}:g" $OUTPUT_FILE
     sed -i -e  "s:@JAVA_VENDOR@:%{origin}:g" $OUTPUT_FILE
 done
 done
@@ -1493,8 +1477,6 @@ top_dir_abs_path=$(pwd)/%{top_level_dir_name}
 mkdir -p %{buildoutputdir $suffix}
 pushd %{buildoutputdir $suffix}
 
-NSS_LIBS="%{NSS_LIBS} -lfreebl" \
-NSS_CFLAGS="%{NSS_CFLAGS}" \
 bash ../../configure \
 %ifnarch %{jit_arches}
     --with-jvm-variants=zero \
@@ -1506,7 +1488,6 @@ bash ../../configure \
     --with-boot-jdk=/usr/lib/jvm/java-openjdk \
     --with-debug-level=$debugbuild \
     --enable-unlimited-crypto \
-    --enable-system-nss \
     --with-zlib=system \
     --with-libjpeg=system \
     --with-giflib=system \
@@ -2059,98 +2040,118 @@ require "copy_jdk_configs.lua"
 
 %files accessibility-debug
 %{files_accessibility -- %{debug_suffix_unquoted}}
-
 %endif
 
 %changelog
-* Thu Jul 11 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.222.b10-0
+* Thu Jul 11 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.222.b10-1
 - Update to aarch64-shenandoah-jdk8u222-b10.
 - Resolves: rhbz#1724452
 
-* Tue Jul 09 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.222.b09-0
+* Mon Jul 08 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.222.b09-2
+- Use normal_suffix for Javadoc zip filename to copy, as there is is no debug version.
+- Resolves: rhbz#1724452
+
+* Mon Jul 08 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.222.b09-2
+- Provide Javadoc debug subpackages for now, but populate them from the normal build.
+- Resolves: rhbz#1724452
+
+* Mon Jul 08 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.222.b09-1
 - Update to aarch64-shenandoah-jdk8u222-b09.
 - Switch to GA mode for final release.
 - Resolves: rhbz#1724452
 
-* Tue Jul 09 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.222.b08-0.0.ea
+* Tue Jul 02 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.222.b08-0.1.ea
 - Update to aarch64-shenandoah-jdk8u222-b08.
 - Adjust PR3083/RH134640 to apply after JDK-8182999
 - Resolves: rhbz#1724452
 
-* Mon Jul 08 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.222.b07-0.0.ea
-- Update to aarch64-shenandoah-jdk8u222-b07 and Shenandoah merge 2019-06-13.
+* Tue Jul 02 2019 Severin Gehwolf <sgehwolf@redhat.com> - 1:1.8.0.222.b07-0.3.ea
+- Include 'ea' designator in Release when appropriate.
 - Resolves: rhbz#1724452
 
-* Mon Jul 08 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.222.b06-0.0.ea
-- Update to aarch64-shenandoah-jdk8u222-b06.
-- Resolves: rhbz#1724452
-
-* Mon Jul 08 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.222.b05-0.0.ea
-- Update to aarch64-shenandoah-jdk8u222-b05.
-- Resolves: rhbz#1724452
-
-* Mon Jul 08 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.222.b04-0.1.ea
-- Update to aarch64-shenandoah-jdk8u222-b04.
-- Drop remaining JDK-8210425/RH1632174 patch now AArch64 part is upstream.
-- Resolves: rhbz#1724452
-
-* Mon Jul 08 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.222.b03-0.1.ea
-- Use normal_suffix for Javadoc zip filename to copy, as there is is no debug version.
-- Resolves: rhbz#1724452
-
-* Mon Jul 08 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.222.b03-0.1.ea
-- Provide Javadoc debug subpackages for now, but populate them from the normal build.
-- Resolves: rhbz#1724452
-
-* Mon Jul 08 2019 Severin Gehwolf <sgehwolf@redhat.com> - 1:1.8.0.222.b03-0.1.ea
+* Wed Jun 26 2019 Severin Gehwolf <sgehwolf@redhat.com> - 1:1.8.0.222.b07-2
 - Don't produce javadoc/javadoc-zip sub packages for the debug variant build.
 - Don't perform a bootcycle build for the debug variant build.
 - Resolves: rhbz#1724452
 
-* Tue Jul 02 2019 Severin Gehwolf <sgehwolf@redhat.com> - 1:1.8.0.222.b03-0.0.ea
-- Include 'ea' designator in Release when appropriate.
+* Tue Jun 25 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.222.b07-1
+- Update to aarch64-shenandoah-jdk8u222-b07 and Shenandoah merge 2019-06-13.
 - Resolves: rhbz#1724452
 
-* Wed May 22 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.222.b03-0
-- Update to aarch64-shenandoah-jdk8u222-b03.
+* Fri Jun 14 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.222.b06-1
+- Update to aarch64-shenandoah-jdk8u222-b06.
+- Resolves: rhbz#1724452
+
+* Thu Jun 06 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.222.b05-1
+- Update to aarch64-shenandoah-jdk8u222-b05.
+- Resolves: rhbz#1724452
+
+* Sat May 25 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.222.b04-1
+- Update to aarch64-shenandoah-jdk8u222-b04.
+- Drop remaining JDK-8210425/RH1632174 patch now AArch64 part is upstream.
+- Resolves: rhbz#1705328
+
+* Wed May 22 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.222.b03-1
 - Handle milestone as variables so we can alter it easily and set the docs zip filename appropriately.
+- Drop unused use_shenandoah_hotspot variable.
+- Resolves: rhbz#1705328
+
+* Wed May 22 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.222.b03-1
+- Update to aarch64-shenandoah-jdk8u222-b03.
+- Set milestone to "ea" as this is not the final release.
 - Drop 8210425 patches applied upstream. Still need to add AArch64 version in aarch64/shenandoah-jdk8u.
 - Re-generate JDK-8141570 & JDK-8143245 patches due to 8210425 zeroshark.make changes.
-- Drop unused use_shenandoah_hotspot variable.
-- Resolves: rhbz#1724452
+- Resolves: rhbz#1705328
 
-* Mon May 13 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.222.b02-0
+* Mon May 13 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.222.b02-1
 - Update to aarch64-shenandoah-jdk8u222-b02.
 - Drop 8064786/PR3599 & 8210416/RH1632174 as applied upstream (8064786 silently in 8176100).
-- Resolves: rhbz#1724452
+- Resolves: rhbz#1705328
 
-* Thu May 02 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.222.b01-0
+* Thu May 02 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.222.b01-1
 - Update to aarch64-shenandoah-jdk8u222-b01.
 - Refactor PR2888 after inclusion of 8129988 upstream. Now includes PR3575.
 - Drop 8171000, 8197546 & PR3634 as applied upstream.
 - Adjust 8214206 fix for S390 as BinaryMagnitudeSeq moved to shenandoahNumberSeq.cpp
-- Resolves: rhbz#1724452
+- Resolves: rhbz#1705328
 
-* Thu Apr 11 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.212.b04-0
+* Thu Apr 11 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.212.b04-1
 - Update to aarch64-shenandoah-jdk8u212-b04.
 - Resolves: rhbz#1693468
 
-* Thu Apr 11 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.212.b03-0
+* Thu Apr 11 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.212.b03-1
 - Update to aarch64-shenandoah-jdk8u212-b03.
 - Resolves: rhbz#1693468
 
-* Tue Apr 09 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.212.b02-0
+* Wed Apr 10 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.212.b02-2
+- Rebase tarball so the AArch64 fix is included upstream
+- Resolves: rhbz#1693468
+
+* Wed Apr 10 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.212.b02-1
+- Add missing part of JDK-8213419 for AArch64 removing duplicate uabs definitions
+- Yet another cast to resolve s390 ambiguity in call to log2_intptr
+- Resolves: rhbz#1693468
+
+* Wed Apr 10 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.212.b02-1
+- Another cast to resolve s390 ambiguity in call to log2_intptr
+- Resolves: rhbz#1693468
+
+* Tue Apr 09 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.212.b02-1
+- Add cast to resolve s390 ambiguity in call to log2_intptr
+- Resolves: rhbz#1693468
+
+* Tue Apr 09 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.212.b02-1
 - Update to aarch64-shenandoah-jdk8u212-b02.
 - Remove patches included upstream
   - JDK-8197429/PR3546/RH153662{2,3}
   - JDK-8184309/PR3596
   - JDK-8210647/RH1632174
+  - JDK-8029661/PR3642/RH1477159
 - Re-generate patches
   - JDK-8203030
-- Add casts to resolve s390 ambiguity in calls to log2_intptr
 - Resolves: rhbz#1693468
 
-* Sun Apr 07 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.202.b08-0
+* Sun Apr 07 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.202.b08-1
 - Update to aarch64-shenandoah-jdk8u202-b08.
 - Remove patches included upstream
   - JDK-8211387/PR3559
@@ -2166,12 +2167,12 @@ require "copy_jdk_configs.lua"
   - JDK-8210647/RH1632174
 - Resolves: rhbz#1693468
 
-* Thu Apr 04 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.201.b13-0
+* Thu Apr 04 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.201.b13-1
 - Update to aarch64-shenandoah-jdk8u201-b13.
 - Drop JDK-8160748 & JDK-8189170 AArch64 patches now applied upstream.
 - Resolves: rhbz#1693468
 
-* Tue Apr 02 2019 Severin Gehwolf <sgehwolf@redhat.com> - 1:1.8.0.201.b09-3
+* Tue Apr 02 2019 Severin Gehwolf <sgehwolf@redhat.com> - 1:1.8.0.201.b09-5
 - Update patch for RH1566890.
   - Renamed rh1566890_speculative_store_bypass_so_added_more_per_task_speculation_control_CVE_2018_3639 to
     rh1566890-CVE_2018_3639-speculative_store_bypass.patch
@@ -2179,23 +2180,35 @@ require "copy_jdk_configs.lua"
     rh1566890-CVE_2018_3639-speculative_store_bypass_toggle.patch
 - Resolves: rhbz#1693468
 
+* Sat Mar 30 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.201.b09-4
+- Drop NSS runtime dependencies and patches to link against it.
+- Resolves: rhbz#1656676
+
+* Fri Mar 29 2019 Andrew John Hughes <gnu.andrew@redhat.com> - 1:1.8.0.201.b09-3
+- Sync SystemTap & desktop files with upstream IcedTea release using new script
+- Resolves: rhbz#1434241
+
+* Fri Mar 29 2019 Jiri Vanek jvanek@redhat.com - 1:1.8.0.201.b09-3
+- Change handling of SystemTap tarball, removing Java version
+- Resolves: rhbz#1434241
+
 * Thu Feb 28 2019 Jiri Vanek jvanek@redhat.com - 1:1.8.0.201.b09-2
 - Replaced pcsc-lite-devel (which is in optional channel) with pcsc-lite-libs.
 - added rh1684077-openjdk_should_depend_on_pcsc-lite-libs_instead_of_pcsc-lite-devel.patch to make jdk work with pcsc
 
-* Wed Jan 16 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.201.b09-0
+* Wed Jan 16 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.201.b09-1
 - Update to aarch64-shenandoah-jdk8u201-b09.
 - Resolves: rhbz#1661577
 
-* Wed Jan 16 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.192.b12-0
+* Wed Jan 16 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.192.b12-1
 - Add port of 8189170 to AArch64 which is missing from upstream 8u version.
 - Resolves: rhbz#1661577
 
-* Wed Jan 16 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.192.b12-0
+* Wed Jan 16 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.192.b12-1
 - Add 8160748 for AArch64 which is missing from upstream 8u version.
 - Resolves: rhbz#1661577
 
-* Wed Jan 16 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.192.b12-0
+* Wed Jan 16 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.192.b12-1
 - Update to aarch64-shenandoah-jdk8u192-b12.
 - Remove patches included upstream
   - JDK-8031668/PR2842
@@ -2228,58 +2241,77 @@ require "copy_jdk_configs.lua"
   - RH1649664 (due to JDK-8196516)
 - Resolves: rhbz#1661577
 
-* Mon Jan 14 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.191.b14-1
+* Mon Jan 14 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.191.b14-2
 - Add 8131048 & 8164920 (PR3574/RH1498936) to provide a CRC32 intrinsic for PPC64.
-- Resolves: rhbz#1661577
+- Resolves: rhbz#1498936
 
-* Thu Jan 10 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.191.b14-0
+* Thu Jan 10 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.191.b14-1
 - Update to aarch64-shenandoah-jdk8u191-b14.
 - Adjust JDK-8073139/PR1758/RH1191652 to apply following 8155627 backport.
 - Resolves: rhbz#1661577
 
-* Wed Jan 09 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.191.b13-0
+* Wed Jan 09 2019 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.191.b13-1
 - Update to aarch64-shenandoah-jdk8u191-b13.
 - Update tarball generation script in preparation for PR3667/RH1656676 SunEC changes.
 - Use remove-intree-libraries.sh to remove the remaining SunEC code for now.
 - Resolves: rhbz#1661577
 
-* Wed Dec 19 2018 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.191.b13-0
+* Wed Dec 19 2018 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.191.b12-15
 - Fix jdk8073139-pr1758-rh1191652-ppc64_le_says_its_arch_is_ppc64_not_ppc64le_jdk.patch paths to pass git apply
 - Resolves: rhbz#1633817
 
-* Tue Nov 13 2018 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.191.b13-0
+* Tue Dec 04 2018 Severin Gehwolf <sgehwolf@redhat.com> - 1:1.8.0.191.b12-14
+- Added %%global _find_debuginfo_opts -g
+- Resolves: rhbz#1656996
+
+* Thu Nov 22 2018 Andrew John Hughes <gnu.andrew@redhat.com> - 1:1.8.0.191.b12-13
+- Add backport of JDK-8029661 which adds TLSv1.2 support to the PKCS11 provider.
+- Resolves: rhbz#1477159
+
+* Tue Nov 20 2018 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.191.b12-12
 - Revise Shenandoah PR3634 patch following upstream discussion.
 - Resolves: rhbz#1633817
 
-* Wed Nov 07 2018 Jiri Vanek <jvanek@redhat.com> - 1:1.8.0.191.b13-0
-- Headful Requires of cups, replaced by Requires of cups-libs in headless
+* Tue Nov 20 2018 Jiri Vanek <jvanek@redhat.com> - 1:1.8.0.191.b12-11
+- Renamed all patches to new convention
+-   bug1-bug2-..-bugN-XY-lowercase_comment_suffix_or_jdkpart.patch
 - Resolves: rhbz#1633817
 
-* Wed Nov 07 2018 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.191.b13-0
+* Wed Nov 07 2018 Jiri Vanek <jvanek@redhat.com> - 1:1.8.0.191.b12-10
+- Headful Requires of cups, replaced by Requires of cups-libs in headless
+- Resolves: rhbz#1598152
+
+* Wed Nov 07 2018 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.191.b12-9
 - Note why PR1834/RH1022017 is not suitable to go upstream in its current form.
 - Resolves: rhbz#1633817
 
-* Mon Nov 05 2018 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.191.b13-0
+* Tue Nov 06 2018 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.191.b12-9
 - Document patch sections.
 - Resolves: rhbz#1633817
 
-* Mon Nov 05 2018 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.191.b13-0
+* Tue Nov 06 2018 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.191.b12-9
 - Fix patch organisation in the spec file:
-   * Move ECC patches back to upstreamable section
-   * Move system cacerts patches to upstreamable section
-   * Merge "Local fixes" and "RPM fixes" which amount to the same thing
-   * Move system libpng & lcms patches back to 8u upstreamable section
-   * Make it clearer that "Non-OpenJDK fixes" is currently empty
+-   * Move ECC patches back to upstreamable section
+-   * Move system cacerts patches to upstreamable section
+-   * Merge "Local fixes" and "RPM fixes" which amount to the same thing
+-   * Move system libpng & lcms patches back to 8u upstreamable section
+-   * Make it clearer that "Non-OpenJDK fixes" is currently empty
+- Resolves: rhbz#1633817
+
+* Tue Nov 06 2018 Andrew Hughes <gnu.andrew@redhat.com> - 1:1.8.0.191.b12-9
+- Bump release so y-stream is higher than z-stream.
 - Resolves: rhbz#1633817
 
 * Mon Oct 29 2018 Jiri Vanek <jvanek@redhat.com> - 1:1.8.0.191.b12-8
 - added Patch583 jdk8172850-rh1640127-01-register_allocator_crash.patch
 - added Patch584 jdk8209639-rh1640127-02-coalesce_attempted_spill_non_spillable.patch
+- Resolves: rhbz#1633817
 
 * Mon Oct 29 2018 Severin Gehwolf <sgehwolf@redhat.com> - 1:1.8.0.191.b12-7
 - Add patch jdk8210425-rh1632174-03-compile_with_o2_and_ffp_contract_off_as_for_fdlibm_zero.patch:
   - Annother fix for optimization gaps (annocheck issues)
   - Zero 8u version fix was missing. Hence, only shows up on Zero arches.
+- Resolves: rhbz#1633817
 
 * Mon Oct 29 2018 Severin Gehwolf <sgehwolf@redhat.com> - 1:1.8.0.191.b12-6
 - Add fixes for optimization gaps (annocheck issues):
@@ -2288,10 +2320,12 @@ require "copy_jdk_configs.lua"
   - 8210416: [linux] Poor StrictMath performance due to non-optimized compilation
   - 8210425: [x86] sharedRuntimeTrig/sharedRuntimeTrans compiled without optimization
              8u upstream and aarch64/jdk8u upstream versions.
+- Resolves: rhbz#1633817
 
 * Mon Oct 29 2018 Severin Gehwolf <sgehwolf@redhat.com> - 1:1.8.0.191.b12-5
 - Removed patch, rh1214835.patch, since it's invalid:
   See https://icedtea.classpath.org/bugzilla/show_bug.cgi?id=2304#c3
+- Resolves: rhbz#1633817
 
 * Mon Oct 29 2018 Severin Gehwolf <sgehwolf@redhat.com> - 1:1.8.0.191.b12-4
 - Update(s) from upstreamed patches:
@@ -2307,6 +2341,7 @@ require "copy_jdk_configs.lua"
 - Use --with-native-debug-symbols=internal which JDK-8036003 adds.
 - Remove comment for make invocation since it's no longer valid.
   --with-native-debug-symbols=internal will do everything we need.
+- Resolves: rhbz#1633817
 
 * Tue Oct 23 2018 Jiri Vanek <jvanek@redhat.com> - 1:1.8.0.191.b12-3
 - cups moved to headful package
