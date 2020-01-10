@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -25,15 +25,16 @@
 
 package sun.rmi.transport;
 
-import sun.rmi.transport.tcp.TCPConnection;
-
-import java.io.IOException;
+import java.io.ObjectInputStream;
 import java.rmi.dgc.Lease;
 import java.rmi.dgc.VMID;
 import java.rmi.server.UID;
-import java.util.ArrayList;
+import java.security.AccessController;
+import java.security.PrivilegedAction;
 
 import sun.misc.ObjectInputFilter;
+import sun.rmi.server.UnicastRef;
+import sun.rmi.transport.tcp.TCPConnection;
 
 /**
  * Stubs to invoke DGC remote methods.
@@ -71,9 +72,7 @@ public final class DGCImpl_Stub
     public void clean(java.rmi.server.ObjID[] $param_arrayOf_ObjID_1, long $param_long_2, java.rmi.dgc.VMID $param_VMID_3, boolean $param_boolean_4)
             throws java.rmi.RemoteException {
         try {
-            StreamRemoteCall call = (StreamRemoteCall)ref.newCall((java.rmi.server.RemoteObject) this,
-                    operations, 0, interfaceHash);
-            call.setObjectInputFilter(DGCImpl_Stub::leaseFilter);
+            java.rmi.server.RemoteCall call = ref.newCall((java.rmi.server.RemoteObject) this, operations, 0, interfaceHash);
             try {
                 java.io.ObjectOutput out = call.getOutputStream();
                 out.writeObject($param_arrayOf_ObjID_1);
@@ -98,10 +97,7 @@ public final class DGCImpl_Stub
     public java.rmi.dgc.Lease dirty(java.rmi.server.ObjID[] $param_arrayOf_ObjID_1, long $param_long_2, java.rmi.dgc.Lease $param_Lease_3)
             throws java.rmi.RemoteException {
         try {
-            StreamRemoteCall call =
-                    (StreamRemoteCall)ref.newCall((java.rmi.server.RemoteObject) this,
-                            operations, 1, interfaceHash);
-            call.setObjectInputFilter(DGCImpl_Stub::leaseFilter);
+            java.rmi.server.RemoteCall call = ref.newCall((java.rmi.server.RemoteObject) this, operations, 1, interfaceHash);
             try {
                 java.io.ObjectOutput out = call.getOutputStream();
                 out.writeObject($param_arrayOf_ObjID_1);
@@ -112,17 +108,26 @@ public final class DGCImpl_Stub
             }
             ref.invoke(call);
             java.rmi.dgc.Lease $result;
-            Connection connection = call.getConnection();
+            Connection connection = ((StreamRemoteCall) call).getConnection();
             try {
                 java.io.ObjectInput in = call.getInputStream();
 
+                if (in instanceof ObjectInputStream) {
+                    /**
+                     * Set a filter on the stream for the return value.
+                     */
+                    ObjectInputStream ois = (ObjectInputStream) in;
+                    AccessController.doPrivileged((PrivilegedAction<Void>)() -> {
+                        ObjectInputFilter.Config.setObjectInputFilter(ois, DGCImpl_Stub::leaseFilter);
+                        return null;
+                    });
+                }
                 $result = (java.rmi.dgc.Lease) in.readObject();
-            } catch (ClassCastException | IOException | ClassNotFoundException e) {
+            } catch (java.io.IOException | java.lang.ClassNotFoundException e) {
                 if (connection instanceof TCPConnection) {
                     // Modified to prevent re-use of the connection after an exception
                     ((TCPConnection) connection).getChannel().free(connection, false);
                 }
-                call.discardPendingRefs();
                 throw new java.rmi.UnmarshalException("error unmarshalling return", e);
             } finally {
                 ref.done(call);
@@ -141,10 +146,6 @@ public final class DGCImpl_Stub
      * ObjectInputFilter to filter DGCClient return value (a Lease).
      * The list of acceptable classes is very short and explicit.
      * The depth and array sizes are limited.
-     * <p>
-     * The filter must accept normal and exception returns.
-     * A DGC server may throw exceptions that may have a cause
-     * and suppressed exceptions.
      *
      * @param filterInfo access to class, arrayLength, etc.
      * @return  {@link ObjectInputFilter.Status#ALLOWED} if allowed,
@@ -171,16 +172,7 @@ public final class DGCImpl_Stub
             }
             return (clazz == UID.class ||
                     clazz == VMID.class ||
-                    clazz == Lease.class ||
-                    (Throwable.class.isAssignableFrom(clazz) &&
-                            clazz.getClassLoader() ==
-                            Object.class.getClassLoader()) ||
-                    clazz == StackTraceElement.class ||
-                    clazz == ArrayList.class ||     // for suppressed exceptions, if any
-                    clazz == Object.class ||
-                    clazz.getName().equals("java.util.Collections$UnmodifiableList") ||
-                    clazz.getName().equals("java.util.Collections$UnmodifiableCollection") ||
-                    clazz.getName().equals("java.util.Collections$UnmodifiableRandomAccessList"))
+                    clazz == Lease.class)
                     ? ObjectInputFilter.Status.ALLOWED
                     : ObjectInputFilter.Status.REJECTED;
         }

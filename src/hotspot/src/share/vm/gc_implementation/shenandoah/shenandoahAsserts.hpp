@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, Red Hat, Inc. All rights reserved.
+ * Copyright (c) 2018, Red Hat, Inc. and/or its affiliates.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
@@ -24,6 +24,7 @@
 #ifndef SHARE_VM_GC_SHENANDOAH_SHENANDOAHASSERTS_HPP
 #define SHARE_VM_GC_SHENANDOAH_SHENANDOAHASSERTS_HPP
 
+#include "memory/allocation.hpp"
 #include "oops/oop.hpp"
 #include "utilities/debug.hpp"
 
@@ -35,7 +36,7 @@ public:
     _safe_unknown,
     _safe_oop,
     _safe_oop_fwd,
-    _safe_all
+    _safe_all,
   };
 
   static void print_obj(ShenandoahMessageBuffer &msg, oop obj);
@@ -57,7 +58,8 @@ public:
   static void assert_correct(void* interior_loc, oop obj, const char* file, int line);
   static void assert_forwarded(void* interior_loc, oop obj, const char* file, int line);
   static void assert_not_forwarded(void* interior_loc, oop obj, const char* file, int line);
-  static void assert_marked(void* interior_loc, oop obj, const char* file, int line);
+  static void assert_marked_complete(void* interior_loc, oop obj, const char* file, int line);
+  static void assert_marked_next(void* interior_loc, oop obj, const char* file, int line);
   static void assert_in_cset(void* interior_loc, oop obj, const char* file, int line);
   static void assert_not_in_cset(void* interior_loc, oop obj, const char* file, int line);
   static void assert_not_in_cset_loc(void* interior_loc, const char* file, int line);
@@ -92,12 +94,19 @@ public:
 #define shenandoah_assert_not_forwarded(interior_loc, obj) \
                     ShenandoahAsserts::assert_not_forwarded(interior_loc, obj, __FILE__, __LINE__);
 
-#define shenandoah_assert_marked_if(interior_loc, obj, condition) \
-  if (condition)    ShenandoahAsserts::assert_marked(interior_loc, obj, __FILE__, __LINE__);
-#define shenandoah_assert_marked_except(interior_loc, obj, exception) \
-  if (!(exception)) ShenandoahAsserts::assert_marked(interior_loc, obj, __FILE__, __LINE__);
-#define shenandoah_assert_marked(interior_loc, obj) \
-                    ShenandoahAsserts::assert_marked(interior_loc, obj, __FILE__, __LINE__);
+#define shenandoah_assert_marked_complete_if(interior_loc, obj, condition) \
+  if (condition)    ShenandoahAsserts::assert_marked_complete(interior_loc, obj, __FILE__, __LINE__);
+#define shenandoah_assert_marked_complete_except(interior_loc, obj, exception) \
+  if (!(exception)) ShenandoahAsserts::assert_marked_complete(interior_loc, obj, __FILE__, __LINE__);
+#define shenandoah_assert_marked_complete(interior_loc, obj) \
+                    ShenandoahAsserts::assert_marked_complete(interior_loc, obj, __FILE__, __LINE__);
+
+#define shenandoah_assert_marked_next_if(interior_loc, obj, condition) \
+  if (condition)    ShenandoahAsserts::assert_marked_next(interior_loc, obj, __FILE__, __LINE__);
+#define shenandoah_assert_marked_next_except(interior_loc, obj, exception) \
+  if (!(exception)) ShenandoahAsserts::assert_marked_next(interior_loc, obj, __FILE__, __LINE__);
+#define shenandoah_assert_marked_next(interior_loc, obj) \
+                    ShenandoahAsserts::assert_marked_next(interior_loc, obj, __FILE__, __LINE__);
 
 #define shenandoah_assert_in_cset_if(interior_loc, obj, condition) \
   if (condition)    ShenandoahAsserts::assert_in_cset(interior_loc, obj, __FILE__, __LINE__);
@@ -140,9 +149,13 @@ public:
 #define shenandoah_assert_not_forwarded_except(interior_loc, obj, exception)
 #define shenandoah_assert_not_forwarded(interior_loc, obj)
 
-#define shenandoah_assert_marked_if(interior_loc, obj, condition)
-#define shenandoah_assert_marked_except(interior_loc, obj, exception)
-#define shenandoah_assert_marked(interior_loc, obj)
+#define shenandoah_assert_marked_complete_if(interior_loc, obj, condition)
+#define shenandoah_assert_marked_complete_except(interior_loc, obj, exception)
+#define shenandoah_assert_marked_complete(interior_loc, obj)
+
+#define shenandoah_assert_marked_next_if(interior_loc, obj, condition)
+#define shenandoah_assert_marked_next_except(interior_loc, obj, exception)
+#define shenandoah_assert_marked_next(interior_loc, obj)
 
 #define shenandoah_assert_in_cset_if(interior_loc, obj, condition)
 #define shenandoah_assert_in_cset_except(interior_loc, obj, exception)
@@ -159,11 +172,6 @@ public:
 #define shenandoah_assert_rp_isalive_installed()
 #define shenandoah_assert_rp_isalive_not_installed()
 #endif
-
-#define shenandoah_not_implemented \
-                    { fatal("Deliberately not implemented."); }
-#define shenandoah_not_implemented_return(v) \
-                    { fatal("Deliberately not implemented."); return v; }
 
 };
 

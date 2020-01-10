@@ -34,14 +34,16 @@
  * @author igor.ignatyev@oracle.com
  */
 public class TieredLevelsTest extends CompLevelsTest {
-    public static void main(String[] args) throws Exception, Throwable {
-        if (CompilerWhiteBoxTest.skipOnTieredCompilation(false)) {
+    public static void main(String[] args) throws Exception {
+        if (!TIERED_COMPILATION) {
+            System.err.println("Test isn't applicable w/ disabled "
+                    + "TieredCompilation. Skip test.");
             return;
         }
         CompilerWhiteBoxTest.main(TieredLevelsTest::new, args);
     }
 
-    protected TieredLevelsTest(TestCase testCase) {
+    private TieredLevelsTest(TestCase testCase) {
         super(testCase);
         // to prevent inlining of #method
         WHITE_BOX.testSetDontInlineMethod(method, true);
@@ -74,18 +76,14 @@ public class TieredLevelsTest extends CompLevelsTest {
         }
     }
 
+
     @Override
     protected void checkLevel(int expected, int actual) {
         if (expected == COMP_LEVEL_FULL_PROFILE
                 && actual == COMP_LEVEL_LIMITED_PROFILE) {
             // for simple method full_profile may be replaced by limited_profile
-            if (IS_VERBOSE) {
-                System.out.printf("Level check: full profiling was replaced "
-                        + "by limited profiling. Expected: %d, actual:%d",
-                        expected, actual);
-            }
             return;
         }
         super.checkLevel(expected, actual);
-    }
+   }
 }

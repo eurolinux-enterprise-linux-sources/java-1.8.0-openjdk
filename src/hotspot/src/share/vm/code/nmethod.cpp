@@ -49,6 +49,10 @@
 
 PRAGMA_FORMAT_MUTE_WARNINGS_FOR_GCC
 
+#ifdef BUILTIN_SIM
+#include "../../../../../simulator/simulator.hpp"
+#endif
+
 unsigned char nmethod::_global_unloading_clock = 0;
 
 #ifdef DTRACE_ENABLED
@@ -710,6 +714,15 @@ nmethod::nmethod(
       Universe::heap()->register_nmethod(this);
     }
     debug_only(verify_scavenge_root_oops());
+
+#ifdef BUILTIN_SIM
+    if (NotifySimulator) {
+      unsigned char *base = code_buffer->insts()->start();
+      long delta = entry_point() - base;
+      AArch64Simulator::get_current(UseSimulatorCache, DisableBCCheck)->notifyRelocate(base, delta);
+    }
+#endif
+
     CodeCache::commit(this);
   }
 
@@ -915,6 +928,14 @@ nmethod::nmethod(
       Universe::heap()->register_nmethod(this);
     }
     debug_only(verify_scavenge_root_oops());
+
+#ifdef BUILTIN_SIM
+    if (NotifySimulator) {
+      unsigned char *base = code_buffer->insts()->start();
+      long delta = entry_point() - base;
+      AArch64Simulator::get_current(UseSimulatorCache, DisableBCCheck)->notifyRelocate(base, delta);
+    }
+#endif
 
     CodeCache::commit(this);
 
@@ -1392,6 +1413,7 @@ void nmethod::make_unloaded(BoolObjectClosure* is_alive, oop cause) {
   assert(_method == NULL, "Tautology");
 
   set_osr_link(NULL);
+  //set_scavenge_root_link(NULL); // done by prune_scavenge_root_nmethods
   NMethodSweeper::report_state_change(this);
 }
 
@@ -1849,7 +1871,7 @@ void nmethod::do_unloading(BoolObjectClosure* is_alive, bool unloading_occurred)
 
   // Scopes
   for (oop* p = oops_begin(); p < oops_end(); p++) {
-    if (*p == Universe::non_oop_word())  continue;  // skip non-oops
+    if (oopDesc::unsafe_equals(*p, (oop) Universe::non_oop_word()))  continue;  // skip non-oops
     if (can_unload(is_alive, p, unloading_occurred)) {
       return;
     }
@@ -2022,7 +2044,7 @@ bool nmethod::do_unloading_parallel(BoolObjectClosure* is_alive, bool unloading_
 
   // Scopes
   for (oop* p = oops_begin(); p < oops_end(); p++) {
-    if (*p == Universe::non_oop_word())  continue;  // skip non-oops
+    if (oopDesc::unsafe_equals(*p, (oop) Universe::non_oop_word()))  continue;  // skip non-oops
     if (can_unload(is_alive, p, unloading_occurred)) {
       is_unloaded = true;
       break;
@@ -2175,7 +2197,6 @@ void nmethod::metadata_do(void f(Metadata*)) {
         }
       } else if (iter.type() == relocInfo::virtual_call_type) {
         // Check compiledIC holders associated with this nmethod
-        ResourceMark rm;
         CompiledIC *ic = CompiledIC_at(&iter);
         if (ic->is_icholder_call()) {
           CompiledICHolder* cichk = ic->cached_icholder();
@@ -2237,7 +2258,7 @@ void nmethod::oops_do(OopClosure* f, bool allow_zombie) {
   // Scopes
   // This includes oop constants not inlined in the code stream.
   for (oop* p = oops_begin(); p < oops_end(); p++) {
-    if (*p == Universe::non_oop_word())  continue;  // skip non-oops
+    if (oopDesc::unsafe_equals(*p, (oop) Universe::non_oop_word()))  continue;  // skip non-oops
     f->do_oop(p);
   }
 }

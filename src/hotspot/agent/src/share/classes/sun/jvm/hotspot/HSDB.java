@@ -36,7 +36,6 @@ import sun.jvm.hotspot.code.*;
 import sun.jvm.hotspot.compiler.*;
 import sun.jvm.hotspot.debugger.*;
 import sun.jvm.hotspot.gc_implementation.parallelScavenge.*;
-import sun.jvm.hotspot.gc_implementation.shenandoah.*;
 import sun.jvm.hotspot.gc_interface.*;
 import sun.jvm.hotspot.interpreter.*;
 import sun.jvm.hotspot.memory.*;
@@ -129,14 +128,10 @@ public class HSDB implements ObjectHistogramPanel.Listener, SAListener {
     }
   }
 
-  private class CloseUI extends WindowAdapter {
-
-      @Override
-      public void windowClosing(WindowEvent e) {
-          workerThread.shutdown();
-          frame.dispose();
-      }
-
+  // close this tool without calling System.exit
+  protected void closeUI() {
+      workerThread.shutdown();
+      frame.dispose();
   }
 
   public void run() {
@@ -152,8 +147,7 @@ public class HSDB implements ObjectHistogramPanel.Listener, SAListener {
 
     frame = new JFrame("HSDB - HotSpot Debugger");
     frame.setSize(800, 600);
-    frame.setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
-    frame.addWindowListener(new CloseUI());
+    frame.setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
 
     JMenuBar menuBar = new JMenuBar();
 
@@ -216,8 +210,7 @@ public class HSDB implements ObjectHistogramPanel.Listener, SAListener {
     item = createMenuItem("Exit",
                             new ActionListener() {
                                 public void actionPerformed(ActionEvent e) {
-                                  workerThread.shutdown();
-                                  frame.dispose();
+                                  closeUI();
                                 }
                               });
     item.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_X, ActionEvent.ALT_MASK));
@@ -1087,10 +1080,6 @@ public class HSDB implements ObjectHistogramPanel.Listener, SAListener {
                             anno = "PSOldGen ";
                             bad = false;
                           }
-                        } else if (collHeap instanceof ShenandoahHeap) {
-                          ShenandoahHeap heap = (ShenandoahHeap) collHeap;
-                          anno = "ShenandoahHeap ";
-                          bad = false;
                         } else {
                           // Optimistically assume the oop isn't bad
                           anno = "[Unknown generation] ";

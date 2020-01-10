@@ -27,7 +27,6 @@
 package sun.security.ssl;
 
 import java.security.SecureRandom;
-import java.util.Arrays;
 import javax.net.ssl.SSLProtocolException;
 
 /**
@@ -92,7 +91,11 @@ class SessionId
     @Override
     public int hashCode ()
     {
-        return Arrays.hashCode(sessionId);
+        int     retval = 0;
+
+        for (int i = 0; i < sessionId.length; i++)
+            retval += sessionId [i];
+        return retval;
     }
 
     /** Returns true if the parameter is the same session ID */

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2000, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2000, 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -56,22 +56,12 @@ public class Credentials {
     KerberosTime endTime;
     KerberosTime renewTill;
     HostAddresses cAddr;
+    EncryptionKey serviceKey;
     AuthorizationData authzData;
     private static boolean DEBUG = Krb5.DEBUG;
     private static CredentialsCache cache;
     static boolean alreadyLoaded = false;
     private static boolean alreadyTried = false;
-
-    private Credentials proxy = null;
-
-    public Credentials getProxy() {
-        return proxy;
-    }
-
-    public Credentials setProxy(Credentials proxy) {
-        this.proxy = proxy;
-        return this;
-    }
 
     // Read native ticket with session key type in the given list
     private static native Credentials acquireDefaultNativeCreds(int[] eTypes);
@@ -346,19 +336,20 @@ public class Credentials {
             return null;
         }
 
-        Credentials tgtCred = ccache.getInitialCreds();
+        sun.security.krb5.internal.ccache.Credentials tgtCred  =
+            ccache.getDefaultCreds();
 
         if (tgtCred == null) {
             return null;
         }
 
-        if (EType.isSupported(tgtCred.key.getEType())) {
-            return tgtCred;
+        if (EType.isSupported(tgtCred.getEType())) {
+            return tgtCred.setKrbCreds();
         } else {
             if (DEBUG) {
                 System.out.println(
                     ">>> unsupported key type found the default TGT: " +
-                    tgtCred.key.getEType());
+                    tgtCred.getEType());
             }
             return null;
         }
@@ -393,19 +384,20 @@ public class Credentials {
             cache = CredentialsCache.getInstance();
         }
         if (cache != null) {
-            Credentials temp = cache.getInitialCreds();
+            sun.security.krb5.internal.ccache.Credentials temp =
+                cache.getDefaultCreds();
             if (temp != null) {
                 if (DEBUG) {
                     System.out.println(">>> KrbCreds found the default ticket"
                             + " granting ticket in credential cache.");
                 }
-                if (EType.isSupported(temp.key.getEType())) {
-                    result = temp;
+                if (EType.isSupported(temp.getEType())) {
+                    result = temp.setKrbCreds();
                 } else {
                     if (DEBUG) {
                         System.out.println(
                             ">>> unsupported key type found the default TGT: " +
-                            temp.key.getEType());
+                            temp.getEType());
                     }
                 }
             }
@@ -480,6 +472,10 @@ public class Credentials {
 
     public CredentialsCache getCache() {
         return cache;
+    }
+
+    public EncryptionKey getServiceKey() {
+        return serviceKey;
     }
 
     /*

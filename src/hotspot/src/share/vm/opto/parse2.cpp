@@ -37,6 +37,7 @@
 #include "opto/mulnode.hpp"
 #include "opto/parse.hpp"
 #include "opto/runtime.hpp"
+#include "opto/shenandoahSupport.hpp"
 #include "runtime/deoptimization.hpp"
 #include "runtime/sharedRuntime.hpp"
 
@@ -1136,10 +1137,19 @@ void Parse::do_if(BoolTest::mask btest, Node* c) {
     untaken_branch = tmp;
   }
 
+  taken_branch = _gvn.transform(taken_branch);
+  untaken_branch = _gvn.transform(untaken_branch);
+  Node* taken_memory = NULL;
+  Node* untaken_memory = NULL;
+
+  ShenandoahBarrierNode::do_cmpp_if(*this, taken_branch, untaken_branch, taken_memory, untaken_memory);
+
   // Branch is taken:
   { PreserveJVMState pjvms(this);
-    taken_branch = _gvn.transform(taken_branch);
     set_control(taken_branch);
+    if (taken_memory != NULL) {
+      set_all_memory(taken_memory);
+    }
 
     if (stopped()) {
       if (C->eliminate_boxing()) {
@@ -1156,8 +1166,10 @@ void Parse::do_if(BoolTest::mask btest, Node* c) {
     }
   }
 
-  untaken_branch = _gvn.transform(untaken_branch);
   set_control(untaken_branch);
+  if (untaken_memory != NULL) {
+    set_all_memory(untaken_memory);
+  }
 
   // Branch not taken.
   if (stopped()) {
@@ -2284,7 +2296,7 @@ void Parse::do_one_bytecode() {
     maybe_add_safepoint(iter().get_dest());
     a = pop();
     b = pop();
-    if (UseShenandoahGC && ShenandoahAcmpBarrier) {
+    if (UseShenandoahGC && ShenandoahAcmpBarrier && ShenandoahVerifyOptoBarriers) {
       a = shenandoah_write_barrier(a);
       b = shenandoah_write_barrier(b);
     }

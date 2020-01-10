@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, Red Hat, Inc. All rights reserved.
+ * Copyright (c) 2018 Red Hat, Inc. and/or its affiliates.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
@@ -24,9 +24,7 @@
 /**
  * @test TestThreadFailure
  * @summary Test OOME in separate thread is recoverable
- * @key gc
  * @library /testlibrary
- *
  * @run main/timeout=480 TestThreadFailure
  */
 
@@ -35,7 +33,7 @@ import com.oracle.java.testlibrary.*;
 
 public class TestThreadFailure {
 
-    static final int SIZE = 1024;
+    static final int SIZE  = 1024;
     static final int COUNT = 16;
 
     static class NastyThread extends Thread {
@@ -51,9 +49,9 @@ public class TestThreadFailure {
     public static void main(String[] args) throws Exception {
         if (args.length > 0) {
             for (int t = 0; t < COUNT; t++) {
-                Thread thread = new NastyThread();
-                thread.start();
-                thread.join();
+               Thread thread = new NastyThread();
+               thread.start();
+               thread.join();
             }
             System.out.println("All good");
             return;
@@ -61,11 +59,10 @@ public class TestThreadFailure {
 
         {
             ProcessBuilder pb = ProcessTools.createJavaProcessBuilder(
-                    "-Xmx16m",
-                    "-XX:+UnlockExperimentalVMOptions",
-                    "-XX:+UseShenandoahGC",
-                    TestThreadFailure.class.getName(),
-                    "test");
+                                    "-Xmx16m",
+                                    "-XX:+UseShenandoahGC",
+                                    TestThreadFailure.class.getName(),
+                                    "test");
 
             OutputAnalyzer analyzer = new OutputAnalyzer(pb.start());
             analyzer.shouldHaveExitValue(0);
@@ -75,11 +72,10 @@ public class TestThreadFailure {
 
         {
             ProcessBuilder pb = ProcessTools.createJavaProcessBuilder(
-                    "-Xmx128m",
-                    "-XX:+UnlockExperimentalVMOptions",
-                    "-XX:+UseShenandoahGC",
-                    TestThreadFailure.class.getName(),
-                    "test");
+                                    "-Xmx128m",
+                                    "-XX:+UseShenandoahGC",
+                                    TestThreadFailure.class.getName(),
+                                    "test");
 
             OutputAnalyzer analyzer = new OutputAnalyzer(pb.start());
             analyzer.shouldHaveExitValue(0);

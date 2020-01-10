@@ -1291,8 +1291,7 @@ public final class ImageIO {
      *
      * @exception IllegalArgumentException if <code>input</code> is
      * <code>null</code>.
-     * @exception IOException if an error occurs during reading or when not
-     * able to create required ImageInputStream.
+     * @exception IOException if an error occurs during reading.
      */
     public static BufferedImage read(File input) throws IOException {
         if (input == null) {
@@ -1342,8 +1341,7 @@ public final class ImageIO {
      *
      * @exception IllegalArgumentException if <code>input</code> is
      * <code>null</code>.
-     * @exception IOException if an error occurs during reading or when not
-     * able to create required ImageInputStream.
+     * @exception IOException if an error occurs during reading.
      */
     public static BufferedImage read(InputStream input) throws IOException {
         if (input == null) {
@@ -1351,9 +1349,6 @@ public final class ImageIO {
         }
 
         ImageInputStream stream = createImageInputStream(input);
-        if (stream == null) {
-            throw new IIOException("Can't create an ImageInputStream!");
-        }
         BufferedImage bi = read(stream);
         if (bi == null) {
             stream.close();
@@ -1386,8 +1381,7 @@ public final class ImageIO {
      *
      * @exception IllegalArgumentException if <code>input</code> is
      * <code>null</code>.
-     * @exception IOException if an error occurs during reading or when not
-     * able to create required ImageInputStream.
+     * @exception IOException if an error occurs during reading.
      */
     public static BufferedImage read(URL input) throws IOException {
         if (input == null) {
@@ -1401,14 +1395,6 @@ public final class ImageIO {
             throw new IIOException("Can't get input stream from URL!", e);
         }
         ImageInputStream stream = createImageInputStream(istream);
-        if (stream == null) {
-            /* close the istream when stream is null so that if user has
-             * given filepath as URL he can delete it, otherwise stream will
-             * be open to that file and he will not be able to delete it.
-             */
-            istream.close();
-            throw new IIOException("Can't create an ImageInputStream!");
-        }
         BufferedImage bi;
         try {
             bi = read(stream);
@@ -1521,8 +1507,7 @@ public final class ImageIO {
      *
      * @exception IllegalArgumentException if any parameter is
      * <code>null</code>.
-     * @exception IOException if an error occurs during writing or when not
-     * able to create required ImageOutputStream.
+     * @exception IOException if an error occurs during writing.
      */
     public static boolean write(RenderedImage im,
                                 String formatName,
@@ -1530,6 +1515,7 @@ public final class ImageIO {
         if (output == null) {
             throw new IllegalArgumentException("output == null!");
         }
+        ImageOutputStream stream = null;
 
         ImageWriter writer = getWriter(im, formatName);
         if (writer == null) {
@@ -1539,11 +1525,13 @@ public final class ImageIO {
             return false;
         }
 
-        output.delete();
-        ImageOutputStream stream = createImageOutputStream(output);
-        if (stream == null) {
-            throw new IIOException("Can't create an ImageOutputStream!");
+        try {
+            output.delete();
+            stream = createImageOutputStream(output);
+        } catch (IOException e) {
+            throw new IIOException("Can't create output stream!", e);
         }
+
         try {
             return doWrite(im, writer, stream);
         } finally {
@@ -1571,8 +1559,7 @@ public final class ImageIO {
      *
      * @exception IllegalArgumentException if any parameter is
      * <code>null</code>.
-     * @exception IOException if an error occurs during writing or when not
-     * able to create required ImageOutputStream.
+     * @exception IOException if an error occurs during writing.
      */
     public static boolean write(RenderedImage im,
                                 String formatName,
@@ -1580,10 +1567,13 @@ public final class ImageIO {
         if (output == null) {
             throw new IllegalArgumentException("output == null!");
         }
-        ImageOutputStream stream = createImageOutputStream(output);
-        if (stream == null) {
-            throw new IIOException("Can't create an ImageOutputStream!");
+        ImageOutputStream stream = null;
+        try {
+            stream = createImageOutputStream(output);
+        } catch (IOException e) {
+            throw new IIOException("Can't create output stream!", e);
         }
+
         try {
             return doWrite(im, getWriter(im, formatName), stream);
         } finally {

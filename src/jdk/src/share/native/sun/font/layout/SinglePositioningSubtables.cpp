@@ -42,10 +42,6 @@ U_NAMESPACE_BEGIN
 
 le_uint32 SinglePositioningSubtable::process(const LEReferenceTo<SinglePositioningSubtable> &base, GlyphIterator *glyphIterator, const LEFontInstance *fontInstance, LEErrorCode &success) const
 {
-    if (LE_FAILURE(success)) {
-        return 0;
-    }
-
     switch(SWAPW(subtableFormat))
     {
     case 0:
@@ -72,10 +68,6 @@ le_uint32 SinglePositioningSubtable::process(const LEReferenceTo<SinglePositioni
 
 le_uint32 SinglePositioningFormat1Subtable::process(const LEReferenceTo<SinglePositioningFormat1Subtable> &base, GlyphIterator *glyphIterator, const LEFontInstance *fontInstance, LEErrorCode &success) const
 {
-    if (LE_FAILURE(success)) {
-        return 0;
-    }
-
     LEGlyphID glyph = glyphIterator->getCurrGlyphID();
     le_int32 coverageIndex = getGlyphCoverage(base, glyph, success);
     if (LE_FAILURE(success)) {
@@ -93,10 +85,6 @@ le_uint32 SinglePositioningFormat1Subtable::process(const LEReferenceTo<SinglePo
 
 le_uint32 SinglePositioningFormat2Subtable::process(const LEReferenceTo<SinglePositioningFormat2Subtable> &base, GlyphIterator *glyphIterator, const LEFontInstance *fontInstance, LEErrorCode &success) const
 {
-    if (LE_FAILURE(success)) {
-        return 0;
-    }
-
     LEGlyphID glyph = glyphIterator->getCurrGlyphID();
     le_int16 coverageIndex = (le_int16) getGlyphCoverage(base, glyph, success);
     if (LE_FAILURE(success)) {

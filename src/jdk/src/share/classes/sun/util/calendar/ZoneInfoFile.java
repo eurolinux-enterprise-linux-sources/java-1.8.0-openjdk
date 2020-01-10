@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -609,6 +609,8 @@ public final class ZoneInfoFile {
                 dstSavings = (startRule.offsetAfter - startRule.offsetBefore) * 1000;
 
                 // Note: known mismatching -> Asia/Amman
+                //                            Asia/Gaza
+                //                            Asia/Hebron
                 // ZoneInfo :      startDayOfWeek=5     <= Thursday
                 //                 startTime=86400000   <= 24 hours
                 // This:           startDayOfWeek=6
@@ -617,14 +619,18 @@ public final class ZoneInfoFile {
                 // its endDayOfWeek and endTime
                 // Below is the workarounds, it probably slows down everyone a little
                 if (params[2] == 6 && params[3] == 0 &&
-                    (zoneId.equals("Asia/Amman"))) {
+                    (zoneId.equals("Asia/Amman") ||
+                     zoneId.equals("Asia/Gaza") ||
+                     zoneId.equals("Asia/Hebron"))) {
                     params[2] = 5;
                     params[3] = 86400000;
                 }
                 // Additional check for startDayOfWeek=6 and starTime=86400000
-                // is needed for Asia/Amman;
+                // is needed for Asia/Amman; Asia/Gasa and Asia/Hebron
                 if (params[2] == 7 && params[3] == 0 &&
-                     (zoneId.equals("Asia/Amman"))) {
+                     (zoneId.equals("Asia/Amman") ||
+                      zoneId.equals("Asia/Gaza") ||
+                      zoneId.equals("Asia/Hebron"))) {
                     params[2] = 6;        // Friday
                     params[3] = 86400000; // 24h
                 }

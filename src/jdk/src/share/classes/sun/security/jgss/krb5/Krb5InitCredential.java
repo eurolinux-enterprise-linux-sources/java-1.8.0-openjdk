@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2000, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2000, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -55,7 +55,6 @@ public class Krb5InitCredential
 
     private Krb5NameElement name;
     private Credentials krb5Credentials;
-    public KerberosTicket proxyTicket;
 
     private Krb5InitCredential(Krb5NameElement name,
                                byte[] asn1Encoding,
@@ -154,7 +153,7 @@ public class Krb5InitCredential
                                        Krb5MechFactory.NT_GSS_KRB5_PRINCIPAL);
         }
 
-        Krb5InitCredential result = new Krb5InitCredential(name,
+        return new Krb5InitCredential(name,
                                       tgt.getEncoded(),
                                       tgt.getClient(),
                                       tgt.getServer(),
@@ -166,9 +165,6 @@ public class Krb5InitCredential
                                       tgt.getEndTime(),
                                       tgt.getRenewTill(),
                                       tgt.getClientAddresses());
-        result.proxyTicket = KerberosSecrets.getJavaxSecurityAuthKerberosAccess().
-            kerberosTicketGetProxy(tgt);
-        return result;
     }
 
     static Krb5InitCredential getInstance(Krb5NameElement name,
@@ -338,9 +334,9 @@ public class Krb5InitCredential
                 public KerberosTicket run() throws Exception {
                     // It's OK to use null as serverPrincipal. TGT is almost
                     // the first ticket for a principal and we use list.
-                    return Krb5Util.getInitialTicket(
+                    return Krb5Util.getTicket(
                         realCaller,
-                        clientPrincipal, acc);
+                        clientPrincipal, null, acc);
                         }});
         } catch (PrivilegedActionException e) {
             GSSException ge =

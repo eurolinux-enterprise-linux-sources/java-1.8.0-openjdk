@@ -101,16 +101,16 @@ const char* GCCause::to_string(GCCause::Cause cause) {
       return "G1 Humongous Allocation";
 
     case _shenandoah_allocation_failure_evac:
-      return "Allocation Failure During Evacuation";
+      return "Allocation Failure During Evac";
 
     case _shenandoah_stop_vm:
       return "Stopping VM";
 
     case _shenandoah_concurrent_gc:
-      return "Concurrent GC";
+      return "Shenandoah Concurrent GC";
 
     case _shenandoah_upgrade_to_full_gc:
-      return "Upgrade To Full GC";
+      return "Shenandoah Upgrade To Full GC";
 
     case _last_ditch_collection:
       return "Last ditch collection";

@@ -22,18 +22,14 @@
  */
 
 /**
- * @test TestCommonGCLoads
+ * @test
  * @summary Test GC state load commoning works
- * @key gc
  * @requires vm.flavor == "server"
- *
- * @run main/othervm -XX:-BackgroundCompilation -XX:-UseOnStackReplacement -XX:-TieredCompilation
- *                   -XX:+UnlockExperimentalVMOptions -XX:+UseShenandoahGC
- *                   -XX:-ShenandoahCommonGCStateLoads
+ * @run main/othervm -XX:-BackgroundCompilation -XX:-UseOnStackReplacement -XX:-TieredCompilation -XX:+UseShenandoahGC
+ *                   -XX:+UnlockExperimentalVMOptions -XX:-ShenandoahCommonGCStateLoads
  *                   TestCommonGCLoads
- * @run main/othervm -XX:-BackgroundCompilation -XX:-UseOnStackReplacement -XX:-TieredCompilation
- *                   -XX:+UnlockExperimentalVMOptions -XX:+UseShenandoahGC
- *                   -XX:+ShenandoahCommonGCStateLoads
+ * @run main/othervm -XX:-BackgroundCompilation -XX:-UseOnStackReplacement -XX:-TieredCompilation -XX:+UseShenandoahGC
+ *                   -XX:+UnlockExperimentalVMOptions -XX:+ShenandoahCommonGCStateLoads
  *                   TestCommonGCLoads
  */
 

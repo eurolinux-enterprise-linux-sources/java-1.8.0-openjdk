@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2002, 2017, Oracle and/or its affiliates. All rights reserved.
- * Copyright (c) 2012, 2017 SAP AG. All rights reserved.
+ * Copyright 2012, 2017 SAP AG. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -516,8 +516,6 @@ class MacroAssembler: public Assembler {
   void card_write_barrier_post(Register Rstore_addr, Register Rnew_val, Register Rtmp);
   void card_table_write(jbyte* byte_map_base, Register Rtmp, Register Robj);
 
-  void resolve_jobject(Register value, Register tmp1, Register tmp2, bool needs_frame);
-
 #if INCLUDE_ALL_GCS
   // General G1 pre-barrier generator.
   void g1_write_barrier_pre(Register Robj, RegisterOrConstant offset, Register Rpre_val,
@@ -666,40 +664,6 @@ class MacroAssembler: public Assembler {
                           Register t0, Register t1, Register t2);
 
   void kernel_crc32_singleByte(Register crc, Register buf, Register len, Register table, Register tmp);
-
-  // SHA-2 auxiliary functions and public interfaces
- private:
-  void sha256_deque(const VectorRegister src,
-      const VectorRegister dst1, const VectorRegister dst2, const VectorRegister dst3);
-  void sha256_load_h_vec(const VectorRegister a, const VectorRegister e, const Register hptr);
-  void sha256_round(const VectorRegister* hs, const int total_hs, int& h_cnt, const VectorRegister kpw);
-  void sha256_load_w_plus_k_vec(const Register buf_in, const VectorRegister* ws,
-      const int total_ws, const Register k, const VectorRegister* kpws,
-      const int total_kpws);
-  void sha256_calc_4w(const VectorRegister w0, const VectorRegister w1,
-      const VectorRegister w2, const VectorRegister w3, const VectorRegister kpw0,
-      const VectorRegister kpw1, const VectorRegister kpw2, const VectorRegister kpw3,
-      const Register j, const Register k);
-  void sha256_update_sha_state(const VectorRegister a, const VectorRegister b,
-      const VectorRegister c, const VectorRegister d, const VectorRegister e,
-      const VectorRegister f, const VectorRegister g, const VectorRegister h,
-      const Register hptr);
-
-  void sha512_load_w_vec(const Register buf_in, const VectorRegister* ws, const int total_ws);
-  void sha512_update_sha_state(const Register state, const VectorRegister* hs, const int total_hs);
-  void sha512_round(const VectorRegister* hs, const int total_hs, int& h_cnt, const VectorRegister kpw);
-  void sha512_load_h_vec(const Register state, const VectorRegister* hs, const int total_hs);
-  void sha512_calc_2w(const VectorRegister w0, const VectorRegister w1,
-      const VectorRegister w2, const VectorRegister w3,
-      const VectorRegister w4, const VectorRegister w5,
-      const VectorRegister w6, const VectorRegister w7,
-      const VectorRegister kpw0, const VectorRegister kpw1, const Register j,
-      const VectorRegister vRb, const Register k);
-
- public:
-  void sha256(bool multi_block);
-  void sha512(bool multi_block);
-
 
   //
   // Debugging

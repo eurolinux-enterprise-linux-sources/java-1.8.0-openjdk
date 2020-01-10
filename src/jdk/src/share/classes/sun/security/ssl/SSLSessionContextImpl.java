@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1999, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1999, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -33,13 +33,10 @@ import java.util.Locale;
 import javax.net.ssl.SSLSession;
 import javax.net.ssl.SSLSessionContext;
 
-import sun.security.action.GetIntegerAction;
 import sun.security.util.Cache;
 
 
 final class SSLSessionContextImpl implements SSLSessionContext {
-    private final static int DEFAULT_MAX_CACHE_SIZE = 20480;
-
     private Cache<SessionId, SSLSessionImpl> sessionCache;
                                         // session cache, session id as key
     private Cache<String, SSLSessionImpl> sessionHostPortCache;
@@ -200,19 +197,21 @@ final class SSLSessionContextImpl implements SSLSessionContext {
     }
 
     private int getDefaultCacheLimit() {
+        int cacheLimit = 0;
         try {
-            int defaultCacheLimit =
-                java.security.AccessController.doPrivileged(
-                    new GetIntegerAction("javax.net.ssl.sessionCacheSize",
-                                         DEFAULT_MAX_CACHE_SIZE)).intValue();
-
-            if (defaultCacheLimit >= 0) {
-                return defaultCacheLimit;
-            }
+        String s = java.security.AccessController.doPrivileged(
+                new java.security.PrivilegedAction<String>() {
+                @Override
+                public String run() {
+                    return System.getProperty(
+                        "javax.net.ssl.sessionCacheSize");
+                }
+            });
+            cacheLimit = (s != null) ? Integer.valueOf(s).intValue() : 0;
         } catch (Exception e) {
         }
 
-        return DEFAULT_MAX_CACHE_SIZE;
+        return (cacheLimit > 0) ? cacheLimit : 0;
     }
 
     boolean isTimedout(SSLSession sess) {

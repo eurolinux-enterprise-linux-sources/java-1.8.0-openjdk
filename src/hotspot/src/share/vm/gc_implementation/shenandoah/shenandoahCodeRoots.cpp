@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2019, Red Hat, Inc. All rights reserved.
+ * Copyright (c) 2017, 2018, Red Hat, Inc. and/or its affiliates.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
@@ -21,16 +21,17 @@
  *
  */
 
+
 #include "precompiled.hpp"
 #include "code/codeCache.hpp"
 #include "code/nmethod.hpp"
+#include "gc_implementation/shenandoah/shenandoahHeap.hpp"
 #include "gc_implementation/shenandoah/shenandoahHeap.inline.hpp"
 #include "gc_implementation/shenandoah/shenandoahCodeRoots.hpp"
-#include "memory/resourceArea.hpp"
 
 ShenandoahParallelCodeCacheIterator::ShenandoahParallelCodeCacheIterator() :
         _claimed_idx(0), _finished(false) {
-}
+};
 
 void ShenandoahParallelCodeCacheIterator::parallel_blobs_do(CodeBlobClosure* f) {
   assert(SafepointSynchronize::is_at_safepoint(), "Must be at safepoint");
@@ -79,11 +80,11 @@ void ShenandoahParallelCodeCacheIterator::parallel_blobs_do(CodeBlobClosure* f) 
 
 class ShenandoahNMethodOopDetector : public OopClosure {
 private:
-  ResourceMark rm; // For growable array allocation below.
+  ShenandoahHeap* _heap;
   GrowableArray<oop*> _oops;
 
 public:
-  ShenandoahNMethodOopDetector() : _oops(10) {};
+  ShenandoahNMethodOopDetector() : _heap(ShenandoahHeap::heap()), _oops(10) {};
 
   void do_oop(oop* o) {
     _oops.append(o);
@@ -129,11 +130,11 @@ public:
   }
 };
 
-ShenandoahCodeRoots::PaddedLock ShenandoahCodeRoots::_recorded_nms_lock;
+volatile jint ShenandoahCodeRoots::_recorded_nms_lock;
 GrowableArray<ShenandoahNMethod*>* ShenandoahCodeRoots::_recorded_nms;
 
 void ShenandoahCodeRoots::initialize() {
-  _recorded_nms_lock._lock = 0;
+  _recorded_nms_lock = 0;
   _recorded_nms = new (ResourceObj::C_HEAP, mtGC) GrowableArray<ShenandoahNMethod*>(100, true, mtGC);
 }
 
@@ -207,7 +208,6 @@ ShenandoahCodeRootsIterator::ShenandoahCodeRootsIterator() :
         _heap(ShenandoahHeap::heap()),
         _claimed(0) {
   assert(SafepointSynchronize::is_at_safepoint(), "Must be at safepoint");
-  assert(!Thread::current()->is_Worker_thread(), "Should not be acquired by workers");
   switch (ShenandoahCodeRootsStyle) {
     case 0:
     case 1:
@@ -333,10 +333,9 @@ void ShenandoahNMethod::assert_alive_and_correct() {
   assert(_oops_count > 0, "should have filtered nmethods without oops before");
   ShenandoahHeap* heap = ShenandoahHeap::heap();
   for (int c = 0; c < _oops_count; c++) {
-    oop *loc = _oops[c];
-    assert(_nm->code_contains((address)loc) || _nm->oops_contains(loc), "nmethod should contain the oop*");
-    oop o = oopDesc::load_heap_oop(loc);
-    shenandoah_assert_correct_except(loc, o, o == NULL || heap->is_full_gc_move_in_progress());
+    oop o = oopDesc::load_heap_oop(_oops[c]);
+    shenandoah_assert_correct_except(NULL, o, o == NULL || heap->is_full_gc_move_in_progress());
+    assert(_nm->code_contains((address)_oops[c]) || _nm->oops_contains(_oops[c]), "nmethod should contain the oop*");
   }
 }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2018, Red Hat, Inc. All rights reserved.
+ * Copyright (c) 2017 Red Hat, Inc. and/or its affiliates.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
@@ -26,7 +26,8 @@
  * @summary Test that Shenandoah humongous threshold args are checked
  * @key gc
  * @library /testlibrary
- *
+ * @modules java.base/jdk.internal.misc
+ *          java.management
  * @run driver TestHumongousThresholdArgs
  */
 
@@ -35,30 +36,29 @@ import com.oracle.java.testlibrary.*;
 public class TestHumongousThresholdArgs {
     public static void main(String[] args) throws Exception {
         {
-            ProcessBuilder pb = ProcessTools.createJavaProcessBuilder("-XX:+UnlockExperimentalVMOptions",
-                    "-XX:+UseShenandoahGC",
-                    "-version");
+            ProcessBuilder pb = ProcessTools.createJavaProcessBuilder("-XX:+UseShenandoahGC",
+                                                                      "-version");
             OutputAnalyzer output = new OutputAnalyzer(pb.start());
             output.shouldHaveExitValue(0);
         }
 
-        int[] valid = new int[] {1, 10, 50, 90, 100};
-        int[] invalid = new int[] {-100, -1, 0, 101, 1000};
+        int[] valid = new int[] { 1, 10, 50, 90, 100 };
+        int[] invalid = new int[] { -100, -1, 0, 101, 1000 };
 
         for (int v : valid) {
-            ProcessBuilder pb = ProcessTools.createJavaProcessBuilder("-XX:+UnlockExperimentalVMOptions",
-                    "-XX:+UseShenandoahGC",
-                    "-XX:ShenandoahHumongousThreshold=" + v,
-                    "-version");
+            ProcessBuilder pb = ProcessTools.createJavaProcessBuilder("-XX:+UseShenandoahGC",
+                                                                      "-XX:+UnlockExperimentalVMOptions",
+                                                                      "-XX:ShenandoahHumongousThreshold=" + v,
+                                                                      "-version");
             OutputAnalyzer output = new OutputAnalyzer(pb.start());
             output.shouldHaveExitValue(0);
         }
 
         for (int v : invalid) {
-            ProcessBuilder pb = ProcessTools.createJavaProcessBuilder("-XX:+UnlockExperimentalVMOptions",
-                    "-XX:+UseShenandoahGC",
-                    "-XX:ShenandoahHumongousThreshold=" + v,
-                    "-version");
+            ProcessBuilder pb = ProcessTools.createJavaProcessBuilder("-XX:+UseShenandoahGC",
+                                                                      "-XX:+UnlockExperimentalVMOptions",
+                                                                      "-XX:ShenandoahHumongousThreshold=" + v,
+                                                                      "-version");
             OutputAnalyzer output = new OutputAnalyzer(pb.start());
             output.shouldHaveExitValue(1);
         }

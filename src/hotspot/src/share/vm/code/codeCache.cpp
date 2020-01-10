@@ -336,19 +336,16 @@ void CodeCache::blobs_do(CodeBlobClosure* f) {
 }
 
 // Walk the list of methods which might contain non-perm oops.
-void CodeCache::scavenge_root_nmethods_do(CodeBlobToOopClosure* f) {
+void CodeCache::scavenge_root_nmethods_do(CodeBlobClosure* f) {
   assert_locked_or_safepoint(CodeCache_lock);
 
   if (UseG1GC || UseShenandoahGC) {
     return;
   }
 
-  const bool fix_relocations = f->fix_relocations();
   debug_only(mark_scavenge_root_nmethods());
 
-  nmethod* prev = NULL;
-  nmethod* cur = scavenge_root_nmethods();
-  while (cur != NULL) {
+  for (nmethod* cur = scavenge_root_nmethods(); cur != NULL; cur = cur->scavenge_root_link()) {
     debug_only(cur->clear_scavenge_root_marked());
     assert(cur->scavenge_root_not_marked(), "");
     assert(cur->on_scavenge_root_list(), "else shouldn't be on this list");
@@ -363,18 +360,6 @@ void CodeCache::scavenge_root_nmethods_do(CodeBlobToOopClosure* f) {
       // Perform cur->oops_do(f), maybe just once per nmethod.
       f->do_code_blob(cur);
     }
-    nmethod* const next = cur->scavenge_root_link();
-    // The scavengable nmethod list must contain all methods with scavengable
-    // oops. It is safe to include more nmethod on the list, but we do not
-    // expect any live non-scavengable nmethods on the list.
-    if (fix_relocations) {
-      if (!is_live || !cur->detect_scavenge_root_oops()) {
-        unlink_scavenge_root_nmethod(cur, prev);
-      } else {
-        prev = cur;
-      }
-    }
-    cur = next;
   }
 
   // Check for stray marks.
@@ -394,24 +379,6 @@ void CodeCache::add_scavenge_root_nmethod(nmethod* nm) {
   print_trace("add_scavenge_root", nm);
 }
 
-void CodeCache::unlink_scavenge_root_nmethod(nmethod* nm, nmethod* prev) {
-  assert_locked_or_safepoint(CodeCache_lock);
-
-  assert((prev == NULL && scavenge_root_nmethods() == nm) ||
-         (prev != NULL && prev->scavenge_root_link() == nm), "precondition");
-
-  assert(!UseG1GC, "G1 does not use the scavenge_root_nmethods list");
-
-  print_trace("unlink_scavenge_root", nm);
-  if (prev == NULL) {
-    set_scavenge_root_nmethods(nm->scavenge_root_link());
-  } else {
-    prev->set_scavenge_root_link(nm->scavenge_root_link());
-  }
-  nm->set_scavenge_root_link(NULL);
-  nm->clear_on_scavenge_root_list();
-}
-
 void CodeCache::drop_scavenge_root_nmethod(nmethod* nm) {
   assert_locked_or_safepoint(CodeCache_lock);
 
@@ -420,13 +387,20 @@ void CodeCache::drop_scavenge_root_nmethod(nmethod* nm) {
   }
 
   print_trace("drop_scavenge_root", nm);
-  nmethod* prev = NULL;
-  for (nmethod* cur = scavenge_root_nmethods(); cur != NULL; cur = cur->scavenge_root_link()) {
+  nmethod* last = NULL;
+  nmethod* cur = scavenge_root_nmethods();
+  while (cur != NULL) {
+    nmethod* next = cur->scavenge_root_link();
     if (cur == nm) {
-      unlink_scavenge_root_nmethod(cur, prev);
+      if (last != NULL)
+            last->set_scavenge_root_link(next);
+      else  set_scavenge_root_nmethods(next);
+      nm->set_scavenge_root_link(NULL);
+      nm->clear_on_scavenge_root_list();
       return;
     }
-    prev = cur;
+    last = cur;
+    cur = next;
   }
   assert(false, "should have been on list");
 }
@@ -455,7 +429,11 @@ void CodeCache::prune_scavenge_root_nmethods() {
     } else {
       // Prune it from the list, so we don't have to look at it any more.
       print_trace("prune_scavenge_root", cur);
-      unlink_scavenge_root_nmethod(cur, last);
+      cur->set_scavenge_root_link(NULL);
+      cur->clear_on_scavenge_root_list();
+      if (last != NULL)
+            last->set_scavenge_root_link(next);
+      else  set_scavenge_root_nmethods(next);
     }
     cur = next;
   }

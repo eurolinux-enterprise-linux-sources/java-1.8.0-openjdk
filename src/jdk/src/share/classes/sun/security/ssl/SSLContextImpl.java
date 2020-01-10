@@ -873,20 +873,12 @@ public abstract class SSLContextImpl extends SSLContextSpi {
         }
 
         private static TrustManager[] getTrustManagers() throws Exception {
-            TrustManagerFactory tmf = TrustManagerFactory.getInstance(
-                    TrustManagerFactory.getDefaultAlgorithm());
-            if ("SunJSSE".equals(tmf.getProvider().getName())) {
-                // The implementation will load the default KeyStore
-                // automatically.  Cached trust materials may be used
-                // for performance improvement.
-                tmf.init((KeyStore)null);
-            } else {
-                // Use the explicitly specified KeyStore for third party's
-                // TrustManagerFactory implementation.
-                KeyStore ks = TrustStoreManager.getTrustedKeyStore();
-                tmf.init(ks);
-            }
+            KeyStore ks =
+                TrustManagerFactoryImpl.getCacertsKeyStore("defaultctx");
 
+            TrustManagerFactory tmf = TrustManagerFactory.getInstance(
+                TrustManagerFactory.getDefaultAlgorithm());
+            tmf.init(ks);
             return tmf.getTrustManagers();
         }
 
@@ -1114,9 +1106,8 @@ final class AbstractTrustManagerWrapper extends X509ExtendedTrustManager
         checkAdditionalTrust(chain, authType, engine, false);
     }
 
-    private void checkAdditionalTrust(X509Certificate[] chain,
-            String authType, Socket socket,
-            boolean checkClientTrusted) throws CertificateException {
+    private void checkAdditionalTrust(X509Certificate[] chain, String authType,
+                Socket socket, boolean isClient) throws CertificateException {
         if (socket != null && socket.isConnected() &&
                                     socket instanceof SSLSocket) {
 
@@ -1130,8 +1121,9 @@ final class AbstractTrustManagerWrapper extends X509ExtendedTrustManager
             String identityAlg = sslSocket.getSSLParameters().
                                         getEndpointIdentificationAlgorithm();
             if (identityAlg != null && identityAlg.length() != 0) {
-                X509TrustManagerImpl.checkIdentity(session, chain,
-                                    identityAlg, checkClientTrusted);
+                String hostname = session.getPeerHost();
+                X509TrustManagerImpl.checkIdentity(
+                                    hostname, chain[0], identityAlg);
             }
 
             // try the best to check the algorithm constraints
@@ -1155,13 +1147,12 @@ final class AbstractTrustManagerWrapper extends X509ExtendedTrustManager
                 constraints = new SSLAlgorithmConstraints(sslSocket, true);
             }
 
-            checkAlgorithmConstraints(chain, constraints, checkClientTrusted);
+            checkAlgorithmConstraints(chain, constraints, isClient);
         }
     }
 
-    private void checkAdditionalTrust(X509Certificate[] chain,
-            String authType, SSLEngine engine,
-            boolean checkClientTrusted) throws CertificateException {
+    private void checkAdditionalTrust(X509Certificate[] chain, String authType,
+            SSLEngine engine, boolean isClient) throws CertificateException {
         if (engine != null) {
             SSLSession session = engine.getHandshakeSession();
             if (session == null) {
@@ -1172,8 +1163,9 @@ final class AbstractTrustManagerWrapper extends X509ExtendedTrustManager
             String identityAlg = engine.getSSLParameters().
                                         getEndpointIdentificationAlgorithm();
             if (identityAlg != null && identityAlg.length() != 0) {
-                X509TrustManagerImpl.checkIdentity(session, chain,
-                                    identityAlg, checkClientTrusted);
+                String hostname = session.getPeerHost();
+                X509TrustManagerImpl.checkIdentity(
+                                    hostname, chain[0], identityAlg);
             }
 
             // try the best to check the algorithm constraints
@@ -1197,13 +1189,12 @@ final class AbstractTrustManagerWrapper extends X509ExtendedTrustManager
                 constraints = new SSLAlgorithmConstraints(engine, true);
             }
 
-            checkAlgorithmConstraints(chain, constraints, checkClientTrusted);
+            checkAlgorithmConstraints(chain, constraints, isClient);
         }
     }
 
     private void checkAlgorithmConstraints(X509Certificate[] chain,
-            AlgorithmConstraints constraints,
-            boolean checkClientTrusted) throws CertificateException {
+            AlgorithmConstraints constraints, boolean isClient) throws CertificateException {
 
         try {
             // Does the certificate chain end with a trusted certificate?
@@ -1223,8 +1214,7 @@ final class AbstractTrustManagerWrapper extends X509ExtendedTrustManager
             if (checkedLength >= 0) {
                 AlgorithmChecker checker =
                         new AlgorithmChecker(constraints, null,
-                                (checkClientTrusted ? Validator.VAR_TLS_CLIENT :
-                                            Validator.VAR_TLS_SERVER));
+                                (isClient ? Validator.VAR_TLS_CLIENT : Validator.VAR_TLS_SERVER));
                 checker.init(false);
                 for (int i = checkedLength; i >= 0; i--) {
                     Certificate cert = chain[i];

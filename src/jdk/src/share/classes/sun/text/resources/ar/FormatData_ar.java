@@ -212,7 +212,6 @@ public class FormatData_ar extends ParallelListResourceBundle {
                     "\u062a\u064a\u0634\u0648",
                     "\u0634\u0648\u0648\u0627",
                     "\u0647\u064a\u0633\u064a",
-                    "\u0631\u064a\u0648\u0627",
                 }
             },
             { "japanese.short.Eras",
@@ -222,7 +221,6 @@ public class FormatData_ar extends ParallelListResourceBundle {
                     "\u062a\u064a\u0634\u0648",
                     "\u0634\u0648\u0648\u0627",
                     "\u0647\u064a\u0633\u064a",
-                    "\u0631\u064a\u0648\u0627",
                 }
             },
             { "buddhist.Eras",

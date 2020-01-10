@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2019, Red Hat, Inc. All rights reserved.
+ * Copyright (c) 2013, 2015, Red Hat, Inc. and/or its affiliates.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
@@ -23,6 +23,7 @@
 
 #include "precompiled.hpp"
 #include "gc_implementation/shenandoah/shenandoahMetrics.hpp"
+#include "gc_implementation/shenandoah/shenandoahHeap.hpp"
 #include "gc_implementation/shenandoah/shenandoahHeap.inline.hpp"
 #include "gc_implementation/shenandoah/shenandoahHeapRegion.hpp"
 #include "gc_implementation/shenandoah/shenandoahFreeSet.hpp"
@@ -134,6 +135,7 @@ void ShenandoahMetricsSnapshot::print() {
 }
 
 bool ShenandoahMetricsSnapshot::is_good_progress(const char *label) {
+
   // Under the critical threshold? Declare failure.
   size_t free_actual   = _heap->free_set()->available();
   size_t free_expected = _heap->max_capacity() / 100 * ShenandoahCriticalFreeThreshold;
@@ -173,3 +175,4 @@ bool ShenandoahMetricsSnapshot::is_good_progress(const char *label) {
   // Nothing good had happened.
   return false;
 }
+

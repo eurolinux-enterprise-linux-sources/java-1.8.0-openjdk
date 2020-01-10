@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -26,34 +26,11 @@
 #include <jni.h>
 #include <windows.h>
 #include "jni_util.h"
-#include "jdk_util.h"
 #include <urlmon.h>
 
-typedef HRESULT (WINAPI *CoInternetCreateSecurityManagerType)
-        (IServiceProvider*,IInternetSecurityManager**,DWORD);
-
-static CoInternetCreateSecurityManagerType fn_CoInternetCreateSecurityManager;
-
-JNIEXPORT jboolean JNICALL
-Java_sun_net_www_protocol_http_ntlm_NTLMAuthentication_isTrustedSiteAvailable
-  (JNIEnv *env, jclass clazz)
+JNIEXPORT jboolean JNICALL Java_sun_net_www_protocol_http_ntlm_NTLMAuthentication_isTrustedSite(JNIEnv *env, jclass clazz, jstring url )
 {
-    HMODULE libUrlmon = JDK_LoadSystemLibrary("urlmon.dll");
-    if (libUrlmon != NULL) {
-        fn_CoInternetCreateSecurityManager = (CoInternetCreateSecurityManagerType)
-                GetProcAddress(libUrlmon, "CoInternetCreateSecurityManager");
-        if (fn_CoInternetCreateSecurityManager != NULL) {
-            return JNI_TRUE;
-        }
-    }
-    return JNI_FALSE;
-}
 
-
-JNIEXPORT jboolean JNICALL
-Java_sun_net_www_protocol_http_ntlm_NTLMAuthentication_isTrustedSite0
-  (JNIEnv *env, jclass clazz, jstring url)
-{
     HRESULT hr;
     DWORD dwZone;
     DWORD  pPolicy = 0;
@@ -61,11 +38,8 @@ Java_sun_net_www_protocol_http_ntlm_NTLMAuthentication_isTrustedSite0
     jboolean ret;
     LPCWSTR bstrURL;
 
-    if (fn_CoInternetCreateSecurityManager == NULL)
-        return JNI_FALSE;
-
     // Create IInternetSecurityManager
-    hr = fn_CoInternetCreateSecurityManager(NULL, &spSecurityManager, (DWORD)0);
+    hr = CoInternetCreateSecurityManager(NULL, &spSecurityManager, (DWORD)0);
     if (FAILED(hr)) {
         return JNI_FALSE;
     }

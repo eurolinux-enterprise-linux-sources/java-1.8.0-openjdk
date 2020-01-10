@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2019, Red Hat, Inc. All rights reserved.
+ * Copyright (c) 2013, 2018, Red Hat, Inc. and/or its affiliates.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
@@ -22,15 +22,16 @@
  */
 
 #include "precompiled.hpp"
+#include "gc_implementation/shenandoah/shenandoahHeapRegionSet.hpp"
 #include "gc_implementation/shenandoah/shenandoahHeapRegionSet.inline.hpp"
+#include "gc_implementation/shenandoah/shenandoahHeap.hpp"
 #include "gc_implementation/shenandoah/shenandoahHeap.inline.hpp"
 #include "gc_implementation/shenandoah/shenandoahHeapRegion.hpp"
-#include "gc_implementation/shenandoah/shenandoahUtils.hpp"
 #include "runtime/atomic.hpp"
 #include "utilities/copy.hpp"
 
 ShenandoahHeapRegionSetIterator::ShenandoahHeapRegionSetIterator(const ShenandoahHeapRegionSet* const set) :
-        _set(set), _heap(ShenandoahHeap::heap()), _current_index(0) {}
+        _set(set), _current_index(0), _heap(ShenandoahHeap::heap()) {}
 
 void ShenandoahHeapRegionSetIterator::reset(const ShenandoahHeapRegionSet* const set) {
   _set = set;

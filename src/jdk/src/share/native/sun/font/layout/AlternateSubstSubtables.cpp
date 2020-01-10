@@ -42,10 +42,6 @@ U_NAMESPACE_BEGIN
 le_uint32 AlternateSubstitutionSubtable::process(const LEReferenceTo<AlternateSubstitutionSubtable> &base,
                                        GlyphIterator *glyphIterator, LEErrorCode &success, const LEGlyphFilter *filter) const
 {
-    if (LE_FAILURE(success)) {
-        return 0;
-    }
-
     // NOTE: For now, we'll just pick the first alternative...
     LEGlyphID glyph = glyphIterator->getCurrGlyphID();
     le_int32 coverageIndex = getGlyphCoverage(base, glyph, success);
@@ -54,13 +50,7 @@ le_uint32 AlternateSubstitutionSubtable::process(const LEReferenceTo<AlternateSu
         le_uint16 altSetCount = SWAPW(alternateSetCount);
 
         if (coverageIndex < altSetCount) {
-            const LEReferenceToArrayOf<Offset>
-                arrayRef(base, success, alternateSetTableOffsetArray, altSetCount);
-            if (!LE_SUCCESS(success)) return 0;
-
-            Offset alternateSetTableOffset = SWAPW(arrayRef.getObject(coverageIndex, success));
-            if (!LE_SUCCESS(success)) return 0;
-
+            Offset alternateSetTableOffset = SWAPW(alternateSetTableOffsetArray[coverageIndex]);
             const LEReferenceTo<AlternateSetTable> alternateSetTable(base, success,
                                   (const AlternateSetTable *) ((char *) this + alternateSetTableOffset));
             if (!LE_SUCCESS(success)) return 0;

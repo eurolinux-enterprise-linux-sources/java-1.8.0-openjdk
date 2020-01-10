@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -148,7 +148,7 @@ HS_DTRACE_PROBE_DECL5(hotspot, class__initialization__end,
       len = name->utf8_length();                                 \
     }                                                            \
     HOTSPOT_CLASS_INITIALIZATION_##type(                         \
-      data, len, (void *)(clss)->class_loader(), thread_type); \
+      data, len, (clss)->class_loader(), thread_type);           \
   }
 
 #define DTRACE_CLASSINIT_PROBE_WAIT(type, clss, thread_type, wait) \
@@ -161,7 +161,7 @@ HS_DTRACE_PROBE_DECL5(hotspot, class__initialization__end,
       len = name->utf8_length();                                 \
     }                                                            \
     HOTSPOT_CLASS_INITIALIZATION_##type(                         \
-      data, len, (void *)(clss)->class_loader(), thread_type, wait); \
+      data, len, (clss)->class_loader(), thread_type, wait);     \
   }
 #endif /* USDT2 */
 
@@ -2926,13 +2926,6 @@ void InstanceKlass::adjust_default_methods(InstanceKlass* holder, bool* trace_na
 
 // On-stack replacement stuff
 void InstanceKlass::add_osr_nmethod(nmethod* n) {
-#ifndef PRODUCT
-  if (TieredCompilation) {
-      nmethod * prev = lookup_osr_nmethod(n->method(), n->osr_entry_bci(), n->comp_level(), true);
-      assert(prev == NULL || !prev->is_in_use(),
-      "redundunt OSR recompilation detected. memory leak in CodeCache!");
-  }
-#endif
   // only one compilation can be active
   NEEDS_CLEANUP
   // This is a short non-blocking critical region, so the no safepoint check is ok.
@@ -3054,9 +3047,7 @@ nmethod* InstanceKlass::lookup_osr_nmethod(const Method* m, int bci, int comp_le
     osr = osr->osr_link();
   }
   OsrList_lock->unlock();
-
-  assert(match_level == false || best == NULL, "shouldn't pick up anything if match_level is set");
-  if (best != NULL && best->comp_level() >= comp_level) {
+  if (best != NULL && best->comp_level() >= comp_level && match_level == false) {
     return best;
   }
   return NULL;
@@ -3114,6 +3105,23 @@ static void print_vtable(intptr_t* start, int len, outputStream* st) {
 void InstanceKlass::print_on(outputStream* st) const {
   assert(is_klass(), "must be klass");
   Klass::print_on(st);
+
+  st->print(BULLET"primary supers:    ");
+  for (juint i = 0; i < Klass::primary_super_limit(); i++) {
+    if (_primary_supers[i]) {
+      _primary_supers[i]->name()->print_value_on(st);
+      st->print("   ");
+    }
+  }
+  st->cr();
+
+  st->print(BULLET"secondary supers:    ");
+  int cnt = secondary_supers()->length();
+  for (int i = 0; i < cnt; i++) {
+    secondary_supers()->at(i)->print_value_on(st);
+      st->print("   ");
+  }
+  st->cr();
 
   st->print(BULLET"instance size:     %d", size_helper());                        st->cr();
   st->print(BULLET"klass size:        %d", size());                               st->cr();

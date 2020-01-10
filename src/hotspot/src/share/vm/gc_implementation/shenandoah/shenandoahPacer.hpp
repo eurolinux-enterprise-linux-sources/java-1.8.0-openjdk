@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, Red Hat, Inc. All rights reserved.
+ * Copyright (c) 2018, Red Hat, Inc. and/or its affiliates.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
@@ -24,8 +24,8 @@
 #ifndef SHARE_VM_GC_SHENANDOAH_SHENANDOAHPACER_HPP
 #define SHARE_VM_GC_SHENANDOAH_SHENANDOAHPACER_HPP
 
-#include "gc_implementation/shenandoah/shenandoahNumberSeq.hpp"
 #include "memory/allocation.hpp"
+#include "utilities/numberSeq.hpp"
 
 class ShenandoahHeap;
 
@@ -41,26 +41,20 @@ class ShenandoahHeap;
 class ShenandoahPacer : public CHeapObj<mtGC> {
 private:
   ShenandoahHeap* _heap;
-  BinaryMagnitudeSeq _delays;
-  TruncatedSeq* _progress_history;
-
-  volatile intptr_t _epoch;
-  volatile jdouble _tax_rate;
-
-  char _pad0[DEFAULT_CACHE_LINE_SIZE];
   volatile intptr_t _budget;
-  char _pad1[DEFAULT_CACHE_LINE_SIZE];
+  volatile jdouble _tax_rate;
+  BinaryMagnitudeSeq _delays;
+
   volatile intptr_t _progress;
-  char _pad2[DEFAULT_CACHE_LINE_SIZE];
+  TruncatedSeq* _progress_history;
+  volatile intptr_t _epoch;
 
 public:
   ShenandoahPacer(ShenandoahHeap* heap) :
-          _heap(heap),
+          _heap(heap), _budget(0), _tax_rate(1),
+          _progress(PACING_PROGRESS_UNINIT),
           _progress_history(new TruncatedSeq(5)),
-          _epoch(0),
-          _tax_rate(1),
-          _budget(0),
-          _progress(PACING_PROGRESS_UNINIT) {
+          _epoch(0) {
   }
 
   void setup_for_idle();

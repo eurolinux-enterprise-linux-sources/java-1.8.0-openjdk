@@ -51,8 +51,8 @@ public class Chars {
      */
     static CharBuffer randomizeRange(CharBuffer cb) {
         int mid = cb.capacity() >>> 1;
-        int start = RAND.nextInt(mid + 1); // from 0 to mid
-        int end = mid + RAND.nextInt(cb.capacity() - mid + 1); // from mid to capacity
+        int start = RAND.nextInt(mid);
+        int end = mid + RAND.nextInt(mid);
         cb.position(start);
         cb.limit(end);
         return cb;

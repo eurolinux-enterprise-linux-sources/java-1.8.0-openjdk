@@ -54,7 +54,9 @@ public class NonTieredLevelsTest extends CompLevelsTest {
 
     }
     public static void main(String[] args) throws Exception {
-        if (CompilerWhiteBoxTest.skipOnTieredCompilation(true)) {
+        if (TIERED_COMPILATION) {
+            System.err.println("Test isn't applicable w/ enabled "
+                    + "TieredCompilation. Skip test.");
             return;
         }
         CompilerWhiteBoxTest.main(NonTieredLevelsTest::new, args);

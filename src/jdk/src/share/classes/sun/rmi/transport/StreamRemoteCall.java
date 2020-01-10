@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1996, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1996, 2017, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -36,10 +36,6 @@ import java.rmi.MarshalException;
 import java.rmi.UnmarshalException;
 import java.rmi.server.ObjID;
 import java.rmi.server.RemoteCall;
-import java.security.AccessController;
-import java.security.PrivilegedAction;
-
-import sun.misc.ObjectInputFilter;
 import sun.rmi.runtime.Log;
 import sun.rmi.server.UnicastRef;
 import sun.rmi.transport.tcp.TCPEndpoint;
@@ -54,7 +50,6 @@ public class StreamRemoteCall implements RemoteCall {
     private ConnectionInputStream in = null;
     private ConnectionOutputStream out = null;
     private Connection conn;
-    private ObjectInputFilter filter = null;
     private boolean resultStarted = false;
     private Exception serverException = null;
 
@@ -128,13 +123,6 @@ public class StreamRemoteCall implements RemoteCall {
         }
     }
 
-    public void setObjectInputFilter(ObjectInputFilter filter) {
-        if (in != null) {
-            throw new IllegalStateException("set filter must occur before calling getInputStream");
-        }
-        this.filter = filter;
-    }
-
     /**
      * Get the InputStream the stub/skeleton should get results/arguments
      * from.
@@ -144,12 +132,6 @@ public class StreamRemoteCall implements RemoteCall {
             Transport.transportLog.log(Log.VERBOSE, "getting input stream");
 
             in = new ConnectionInputStream(conn.getInputStream());
-            if (filter != null) {
-                AccessController.doPrivileged((PrivilegedAction<Void>) () -> {
-                    ObjectInputFilter.Config.setObjectInputFilter(in, filter);
-                    return null;
-                });
-            }
         }
         return in;
     }
@@ -269,7 +251,6 @@ public class StreamRemoteCall implements RemoteCall {
             try {
                 ex = in.readObject();
             } catch (Exception e) {
-                discardPendingRefs();
                 throw new UnmarshalException("Error unmarshaling return", e);
             }
 
@@ -278,7 +259,6 @@ public class StreamRemoteCall implements RemoteCall {
             if (ex instanceof Exception) {
                 exceptionReceivedFromServer((Exception) ex);
             } else {
-                discardPendingRefs();
                 throw new UnmarshalException("Return type not Exception");
             }
             // Exception is thrown before fallthrough can occur

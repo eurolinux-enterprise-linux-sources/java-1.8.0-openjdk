@@ -159,9 +159,12 @@ class MacroAssembler: public Assembler {
 
   virtual void _call_Unimplemented(address call_site) {
     mov(rscratch2, call_site);
+    haltsim();
   }
 
 #define call_Unimplemented() _call_Unimplemented((address)__PRETTY_FUNCTION__)
+
+  virtual void notify(int type);
 
   // aliases defined in AARCH64 spec
 
@@ -530,6 +533,17 @@ public:
   inline void clear_fpsr()
   {
     msr(0b011, 0b0100, 0b0100, 0b001, zr);
+  }
+
+  // Macro instructions for accessing and updating the condition flags
+  inline void get_nzcv(Register reg)
+  {
+    mrs(0b011, 0b0100, 0b0010, 0b000, reg);
+  }
+
+  inline void set_nzcv(Register reg)
+  {
+    msr(0b011, 0b0100, 0b0010, 0b000, reg);
   }
 
   // DCZID_EL0: op1 == 011
@@ -934,7 +948,7 @@ public:
   void verify_FPU(int stack_depth, const char* s = "illegal FPU state");
 
   // prints msg, dumps registers and stops execution
-  void stop(const char* msg);
+  void stop(const char* msg, Label *l = NULL);
 
   // prints msg and continues
   void warn(const char* msg);
@@ -1005,7 +1019,9 @@ public:
                Register tmp = rscratch1);
 
   void cmpxchg_oop_shenandoah(Register addr, Register expected, Register new_val,
-                              bool acquire, bool release, bool weak, bool is_cae, Register result);
+                              enum operand_size size,
+                              bool acquire, bool release, bool weak,
+                              Register result = noreg, Register tmp2 = rscratch2);
   // Calls
 
   address trampoline_call(Address entry, CodeBuffer *cbuf = NULL);
@@ -1158,6 +1174,28 @@ public:
   //
 
   public:
+  // enum used for aarch64--x86 linkage to define return type of x86 function
+  enum ret_type { ret_type_void, ret_type_integral, ret_type_float, ret_type_double};
+
+#ifdef BUILTIN_SIM
+  void c_stub_prolog(int gp_arg_count, int fp_arg_count, int ret_type, address *prolog_ptr = NULL);
+#else
+  void c_stub_prolog(int gp_arg_count, int fp_arg_count, int ret_type) { }
+#endif
+
+  // special version of call_VM_leaf_base needed for aarch64 simulator
+  // where we need to specify both the gp and fp arg counts and the
+  // return type so that the linkage routine from aarch64 to x86 and
+  // back knows which aarch64 registers to copy to x86 registers and
+  // which x86 result register to copy back to an aarch64 register
+
+  void call_VM_leaf_base1(
+    address  entry_point,             // the entry point
+    int      number_of_gp_arguments,  // the number of gp reg arguments to pass
+    int      number_of_fp_arguments,  // the number of fp reg arguments to pass
+    ret_type type,		      // the return type for the call
+    Label*   retaddr = NULL
+  );
 
   void ldr_constant(Register dest, const Address &const_addr) {
     if (NearCpool) {

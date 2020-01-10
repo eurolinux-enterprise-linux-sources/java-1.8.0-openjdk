@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2017, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2013, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -304,8 +304,7 @@ final class SortedOps {
     private static abstract class AbstractRefSortingSink<T> extends Sink.ChainedReference<T, T> {
         protected final Comparator<? super T> comparator;
         // @@@ could be a lazy final value, if/when support is added
-        // true if cancellationRequested() has been called
-        protected boolean cancellationRequestedCalled;
+        protected boolean cancellationWasRequested;
 
         AbstractRefSortingSink(Sink<? super T> downstream, Comparator<? super T> comparator) {
             super(downstream);
@@ -320,11 +319,7 @@ final class SortedOps {
          */
         @Override
         public final boolean cancellationRequested() {
-            // If this method is called then an operation within the stream
-            // pipeline is short-circuiting (see AbstractPipeline.copyInto).
-            // Note that we cannot differentiate between an upstream or
-            // downstream operation
-            cancellationRequestedCalled = true;
+            cancellationWasRequested = true;
             return false;
         }
     }
@@ -352,7 +347,7 @@ final class SortedOps {
         public void end() {
             Arrays.sort(array, 0, offset, comparator);
             downstream.begin(offset);
-            if (!cancellationRequestedCalled) {
+            if (!cancellationWasRequested) {
                 for (int i = 0; i < offset; i++)
                     downstream.accept(array[i]);
             }
@@ -391,7 +386,7 @@ final class SortedOps {
         public void end() {
             list.sort(comparator);
             downstream.begin(list.size());
-            if (!cancellationRequestedCalled) {
+            if (!cancellationWasRequested) {
                 list.forEach(downstream::accept);
             }
             else {
@@ -414,8 +409,7 @@ final class SortedOps {
      * Abstract {@link Sink} for implementing sort on int streams.
      */
     private static abstract class AbstractIntSortingSink extends Sink.ChainedInt<Integer> {
-        // true if cancellationRequested() has been called
-        protected boolean cancellationRequestedCalled;
+        protected boolean cancellationWasRequested;
 
         AbstractIntSortingSink(Sink<? super Integer> downstream) {
             super(downstream);
@@ -423,7 +417,7 @@ final class SortedOps {
 
         @Override
         public final boolean cancellationRequested() {
-            cancellationRequestedCalled = true;
+            cancellationWasRequested = true;
             return false;
         }
     }
@@ -450,7 +444,7 @@ final class SortedOps {
         public void end() {
             Arrays.sort(array, 0, offset);
             downstream.begin(offset);
-            if (!cancellationRequestedCalled) {
+            if (!cancellationWasRequested) {
                 for (int i = 0; i < offset; i++)
                     downstream.accept(array[i]);
             }
@@ -490,7 +484,7 @@ final class SortedOps {
             int[] ints = b.asPrimitiveArray();
             Arrays.sort(ints);
             downstream.begin(ints.length);
-            if (!cancellationRequestedCalled) {
+            if (!cancellationWasRequested) {
                 for (int anInt : ints)
                     downstream.accept(anInt);
             }
@@ -513,8 +507,7 @@ final class SortedOps {
      * Abstract {@link Sink} for implementing sort on long streams.
      */
     private static abstract class AbstractLongSortingSink extends Sink.ChainedLong<Long> {
-        // true if cancellationRequested() has been called
-        protected boolean cancellationRequestedCalled;
+        protected boolean cancellationWasRequested;
 
         AbstractLongSortingSink(Sink<? super Long> downstream) {
             super(downstream);
@@ -522,7 +515,7 @@ final class SortedOps {
 
         @Override
         public final boolean cancellationRequested() {
-            cancellationRequestedCalled = true;
+            cancellationWasRequested = true;
             return false;
         }
     }
@@ -549,7 +542,7 @@ final class SortedOps {
         public void end() {
             Arrays.sort(array, 0, offset);
             downstream.begin(offset);
-            if (!cancellationRequestedCalled) {
+            if (!cancellationWasRequested) {
                 for (int i = 0; i < offset; i++)
                     downstream.accept(array[i]);
             }
@@ -589,7 +582,7 @@ final class SortedOps {
             long[] longs = b.asPrimitiveArray();
             Arrays.sort(longs);
             downstream.begin(longs.length);
-            if (!cancellationRequestedCalled) {
+            if (!cancellationWasRequested) {
                 for (long aLong : longs)
                     downstream.accept(aLong);
             }
@@ -612,8 +605,7 @@ final class SortedOps {
      * Abstract {@link Sink} for implementing sort on long streams.
      */
     private static abstract class AbstractDoubleSortingSink extends Sink.ChainedDouble<Double> {
-        // true if cancellationRequested() has been called
-        protected boolean cancellationRequestedCalled;
+        protected boolean cancellationWasRequested;
 
         AbstractDoubleSortingSink(Sink<? super Double> downstream) {
             super(downstream);
@@ -621,7 +613,7 @@ final class SortedOps {
 
         @Override
         public final boolean cancellationRequested() {
-            cancellationRequestedCalled = true;
+            cancellationWasRequested = true;
             return false;
         }
     }
@@ -648,7 +640,7 @@ final class SortedOps {
         public void end() {
             Arrays.sort(array, 0, offset);
             downstream.begin(offset);
-            if (!cancellationRequestedCalled) {
+            if (!cancellationWasRequested) {
                 for (int i = 0; i < offset; i++)
                     downstream.accept(array[i]);
             }
@@ -688,7 +680,7 @@ final class SortedOps {
             double[] doubles = b.asPrimitiveArray();
             Arrays.sort(doubles);
             downstream.begin(doubles.length);
-            if (!cancellationRequestedCalled) {
+            if (!cancellationWasRequested) {
                 for (double aDouble : doubles)
                     downstream.accept(aDouble);
             }

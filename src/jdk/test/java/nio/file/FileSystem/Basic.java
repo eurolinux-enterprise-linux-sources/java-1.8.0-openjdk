@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2008, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -24,25 +24,12 @@
 /* @test
  * @bug 4313887 6838333
  * @summary Unit test for java.nio.file.FileSystem
- * @library .. /lib/testlibrary
- * @build jdk.testlibrary.FileUtils
- * @run main Basic
+ * @library ..
  */
 
-import java.io.File;
+import java.nio.file.*;
+import java.nio.file.attribute.*;
 import java.io.IOException;
-import java.net.URI;
-import java.net.URISyntaxException;
-import java.nio.file.Files;
-import java.nio.file.FileStore;
-import java.nio.file.FileSystem;
-import java.nio.file.FileSystems;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.nio.file.ProviderNotFoundException;
-import java.util.HashMap;
-import java.util.concurrent.TimeUnit;
-import jdk.testlibrary.FileUtils;
 
 /**
  * Simple santity checks for java.nio.file.FileSystem
@@ -54,20 +41,6 @@ public class Basic {
             throw new RuntimeException(msg);
     }
 
-    static void checkFileStores(FileSystem fs) throws IOException {
-        // sanity check method
-        if (FileUtils.areFileSystemsAccessible()) {
-            System.out.println("\n--- Begin FileStores ---");
-            for (FileStore store: fs.getFileStores()) {
-                System.out.println(store);
-            }
-            System.out.println("--- EndFileStores ---\n");
-        } else {
-            System.err.println
-                ("Skipping FileStore check due to file system access failure");
-        }
-    }
-
     static void checkSupported(FileSystem fs, String... views) {
         for (String view: views) {
             check(fs.supportedFileAttributeViews().contains(view),
@@ -75,9 +48,7 @@ public class Basic {
         }
     }
 
-    public static void main(String[] args)
-        throws IOException, URISyntaxException {
-        String os = System.getProperty("os.name");
+    public static void main(String[] args) throws IOException {
         FileSystem fs = FileSystems.getDefault();
 
         // close should throw UOE
@@ -92,11 +63,15 @@ public class Basic {
         check(fs.provider().getScheme().equals("file"),
             "should use 'file' scheme");
 
-        // sanity check FileStores
-        checkFileStores(fs);
+        // santity check method - need to re-visit this in future as I/O errors
+        // are possible
+        for (FileStore store: fs.getFileStores()) {
+            System.out.println(store);
+        }
 
         // sanity check supportedFileAttributeViews
         checkSupported(fs, "basic");
+        String os = System.getProperty("os.name");
         if (os.equals("SunOS"))
             checkSupported(fs, "posix", "unix", "owner", "acl", "user");
         if (os.equals("Linux"))

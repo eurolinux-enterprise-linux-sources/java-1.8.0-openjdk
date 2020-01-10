@@ -122,7 +122,7 @@ public class UnixPrintJob implements CancelablePrintJob {
     UnixPrintJob(PrintService service) {
         this.service = service;
         mDestination = service.getName();
-        if (PrintServiceLookupProvider.isMac()) {
+        if (UnixPrintServiceLookup.isMac()) {
             mDestination = ((IPPPrintService)service).getDest();
         }
         mDestType = UnixPrintJob.DESTPRINTER;
@@ -873,7 +873,7 @@ public class UnixPrintJob implements CancelablePrintJob {
             pFlags |= NOSHEET;
             ncomps+=1;
         }
-        if (PrintServiceLookupProvider.osname.equals("SunOS")) {
+        if (UnixPrintServiceLookup.osname.equals("SunOS")) {
             ncomps+=1; // lp uses 1 more arg than lpr (make a copy)
             execCmd = new String[ncomps];
             execCmd[n++] = "/usr/bin/lp";

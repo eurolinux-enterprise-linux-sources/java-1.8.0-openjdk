@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2018, Red Hat, Inc. All rights reserved.
+ * Copyright (c) 2017 Red Hat, Inc. and/or its affiliates.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
@@ -26,7 +26,8 @@
  * @summary Test that Shenandoah reacts properly on -verbose:gc
  * @key gc
  * @library /testlibrary
- *
+ * @modules java.base/jdk.internal.misc
+ *          java.management
  * @run driver TestVerboseGC
  */
 
@@ -45,8 +46,7 @@ public class TestVerboseGC {
         }
 
         {
-            ProcessBuilder pb = ProcessTools.createJavaProcessBuilder("-XX:+UnlockExperimentalVMOptions",
-                                                                      "-XX:+UseShenandoahGC",
+            ProcessBuilder pb = ProcessTools.createJavaProcessBuilder("-XX:+UseShenandoahGC",
                                                                       "-Xmx128m",
                                                                       TestVerboseGC.class.getName(),
                                                                       "test");
@@ -58,8 +58,7 @@ public class TestVerboseGC {
         }
 
         {
-            ProcessBuilder pb = ProcessTools.createJavaProcessBuilder("-XX:+UnlockExperimentalVMOptions",
-                                                                      "-XX:+UseShenandoahGC",
+            ProcessBuilder pb = ProcessTools.createJavaProcessBuilder("-XX:+UseShenandoahGC",
                                                                       "-Xmx128m",
                                                                       "-verbose:gc",
                                                                       TestVerboseGC.class.getName(),
@@ -72,8 +71,7 @@ public class TestVerboseGC {
         }
 
         {
-            ProcessBuilder pb = ProcessTools.createJavaProcessBuilder("-XX:+UnlockExperimentalVMOptions",
-                                                                      "-XX:+UseShenandoahGC",
+            ProcessBuilder pb = ProcessTools.createJavaProcessBuilder("-XX:+UseShenandoahGC",
                                                                       "-Xmx128m",
                                                                       "-XX:+PrintGC",
                                                                       TestVerboseGC.class.getName(),
@@ -86,8 +84,7 @@ public class TestVerboseGC {
         }
 
         {
-            ProcessBuilder pb = ProcessTools.createJavaProcessBuilder("-XX:+UnlockExperimentalVMOptions",
-                                                                      "-XX:+UseShenandoahGC",
+            ProcessBuilder pb = ProcessTools.createJavaProcessBuilder("-XX:+UseShenandoahGC",
                                                                       "-Xmx128m",
                                                                       "-XX:+PrintGCDetails",
                                                                       TestVerboseGC.class.getName(),

@@ -24,6 +24,8 @@
 /* @test
  * @bug 4607272 6842687
  * @summary Unit test for AsynchronousChannelGroup
+ * @build Restart
+ * @run main/othervm -XX:-UseVMInterruptibleIO Restart
  */
 
 import java.nio.channels.*;

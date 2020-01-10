@@ -65,7 +65,7 @@ final class Sort extends Instruction implements Closure {
     private AttributeValue _order;
     private AttributeValue _caseOrder;
     private AttributeValue _dataType;
-    private AttributeValue _lang; // bug! see 26869, see XALANJ-2546
+    private String         _lang; // bug! see 26869
 
     private String _className = null;
     private ArrayList<VariableRefBase> _closureVars = null;
@@ -153,11 +153,13 @@ final class Sort extends Instruction implements Closure {
         }
         _dataType = AttributeValue.create(this, val, parser);
 
-        val =  getAttribute("lang");
-        _lang = AttributeValue.create(this, val, parser);
+         _lang =  getAttribute("lang"); // bug! see 26869
+  // val =  getAttribute("lang");
+  // _lang = AttributeValue.create(this, val, parser);
         // Get the case order; default is language dependant
-        val = getAttribute("case-order");
-        _caseOrder = AttributeValue.create(this, val, parser);
+    val = getAttribute("case-order");
+    _caseOrder = AttributeValue.create(this, val, parser);
+
     }
 
     /**
@@ -176,7 +178,6 @@ final class Sort extends Instruction implements Closure {
         _order.typeCheck(stable);
         _caseOrder.typeCheck(stable);
         _dataType.typeCheck(stable);
-        _lang.typeCheck(stable);
         return Type.Void;
     }
 
@@ -194,14 +195,16 @@ final class Sort extends Instruction implements Closure {
         _order.translate(classGen, methodGen);
     }
 
-    public void translateCaseOrder(ClassGenerator classGen,
+     public void translateCaseOrder(ClassGenerator classGen,
                    MethodGenerator methodGen) {
-        _caseOrder.translate(classGen, methodGen);
+    _caseOrder.translate(classGen, methodGen);
     }
 
     public void translateLang(ClassGenerator classGen,
                    MethodGenerator methodGen) {
-        _lang.translate(classGen, methodGen);
+    final ConstantPoolGen cpg = classGen.getConstantPool();
+    final InstructionList il = methodGen.getInstructionList();
+    il.append(new PUSH(cpg, _lang)); // bug! see 26869
     }
 
     /**

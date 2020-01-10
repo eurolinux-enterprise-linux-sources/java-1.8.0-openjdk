@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, Red Hat, Inc. All rights reserved.
+ * Copyright (c) 2018, Red Hat, Inc. and/or its affiliates.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
@@ -22,7 +22,6 @@
  */
 
 #include "precompiled.hpp"
-
 #include "gc_implementation/shenandoah/heuristics/shenandoahStaticHeuristics.hpp"
 #include "gc_implementation/shenandoah/shenandoahCollectionSet.hpp"
 #include "gc_implementation/shenandoah/shenandoahFreeSet.hpp"
@@ -33,18 +32,7 @@ ShenandoahStaticHeuristics::ShenandoahStaticHeuristics() : ShenandoahHeuristics(
   // Static heuristics may degrade to continuous if live data is larger
   // than free threshold. ShenandoahAllocationThreshold is supposed to break this,
   // but it only works if it is non-zero.
-  SHENANDOAH_ERGO_OVERRIDE_DEFAULT(ShenandoahAllocationThreshold, 1);
-
-  SHENANDOAH_ERGO_ENABLE_FLAG(ExplicitGCInvokesConcurrent);
-  SHENANDOAH_ERGO_ENABLE_FLAG(ShenandoahImplicitGCInvokesConcurrent);
-
-  // Final configuration checks
-  SHENANDOAH_CHECK_FLAG_SET(ShenandoahSATBBarrier);
-  SHENANDOAH_CHECK_FLAG_SET(ShenandoahReadBarrier);
-  SHENANDOAH_CHECK_FLAG_SET(ShenandoahWriteBarrier);
-  SHENANDOAH_CHECK_FLAG_SET(ShenandoahCASBarrier);
-  SHENANDOAH_CHECK_FLAG_SET(ShenandoahAcmpBarrier);
-  SHENANDOAH_CHECK_FLAG_SET(ShenandoahCloneBarrier);
+  SHENANDOAH_ERGO_OVERRIDE_DEFAULT(ShenandoahImmediateThreshold, 1);
 }
 
 ShenandoahStaticHeuristics::~ShenandoahStaticHeuristics() {}
@@ -52,9 +40,9 @@ ShenandoahStaticHeuristics::~ShenandoahStaticHeuristics() {}
 bool ShenandoahStaticHeuristics::should_start_normal_gc() const {
   ShenandoahHeap* heap = ShenandoahHeap::heap();
 
-  size_t capacity = heap->max_capacity();
+  size_t capacity = heap->capacity();
   size_t available = heap->free_set()->available();
-  size_t threshold_available = capacity / 100 * ShenandoahFreeThreshold;
+  size_t threshold_available = (capacity * ShenandoahFreeThreshold) / 100;
 
   if (available < threshold_available) {
     log_info(gc)("Trigger: Free (" SIZE_FORMAT "M) is below free threshold (" SIZE_FORMAT "M)",

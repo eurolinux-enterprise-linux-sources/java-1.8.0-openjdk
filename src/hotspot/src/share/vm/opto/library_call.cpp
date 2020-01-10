@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1999, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1999, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -42,8 +42,6 @@
 #include "prims/nativeLookup.hpp"
 #include "runtime/sharedRuntime.hpp"
 #include "trace/traceMacros.hpp"
-#include "utilities/macros.hpp"
-
 
 class LibraryIntrinsic : public InlineCallGenerator {
   // Extend the set of intrinsics known to the runtime:
@@ -2739,14 +2737,6 @@ bool LibraryCallKit::inline_unsafe_access(bool is_native_ptr, bool is_store, Bas
   // or Compile::must_alias will throw a diagnostic assert.)
   bool need_mem_bar = (alias_type->adr_type() == TypeOopPtr::BOTTOM);
 
-#if INCLUDE_ALL_GCS
-  // Work around JDK-8220714 bug. This is done for Shenandoah only, until
-  // the shared code fix is upstreamed and properly tested there.
-  if (UseShenandoahGC) {
-    need_mem_bar |= is_native_ptr;
-  }
-#endif
-
   // If we are reading the value of the referent field of a Reference
   // object (either by using Unsafe directly or through reflection)
   // then, if G1 is enabled, we need to record the referent in an
@@ -2772,9 +2762,6 @@ bool LibraryCallKit::inline_unsafe_access(bool is_native_ptr, bool is_store, Bas
   // and it is not possible to fully distinguish unintended nulls
   // from intended ones in this API.
 
-  Node* load = NULL;
-  Node* store = NULL;
-  Node* leading_membar = NULL;
   if (is_volatile) {
     // We need to emit leading and trailing CPU membars (see below) in
     // addition to memory membars when is_volatile. This is a little
@@ -2785,10 +2772,10 @@ bool LibraryCallKit::inline_unsafe_access(bool is_native_ptr, bool is_store, Bas
     need_mem_bar = true;
     // For Stores, place a memory ordering barrier now.
     if (is_store) {
-      leading_membar = insert_mem_bar(Op_MemBarRelease);
+      insert_mem_bar(Op_MemBarRelease);
     } else {
       if (support_IRIW_for_not_multiple_copy_atomic_cpu) {
-        leading_membar = insert_mem_bar(Op_MemBarVolatile);
+        insert_mem_bar(Op_MemBarVolatile);
       }
     }
   }
@@ -2805,7 +2792,7 @@ bool LibraryCallKit::inline_unsafe_access(bool is_native_ptr, bool is_store, Bas
     MemNode::MemOrd mo = is_volatile ? MemNode::acquire : MemNode::unordered;
     // To be valid, unsafe loads may depend on other conditions than
     // the one that guards them: pin the Load node
-    load = make_load(control(), adr, value_type, type, adr_type, mo, LoadNode::Pinned, is_volatile, unaligned, mismatched);
+    Node* p = make_load(control(), adr, value_type, type, adr_type, mo, LoadNode::Pinned, is_volatile, unaligned, mismatched);
     // load value
     switch (type) {
     case T_BOOLEAN:
@@ -2819,13 +2806,13 @@ bool LibraryCallKit::inline_unsafe_access(bool is_native_ptr, bool is_store, Bas
       break;
     case T_OBJECT:
       if (need_read_barrier) {
-        insert_pre_barrier(heap_base_oop, offset, load, !(is_volatile || need_mem_bar));
+        insert_pre_barrier(heap_base_oop, offset, p, !(is_volatile || need_mem_bar));
       }
       break;
     case T_ADDRESS:
       // Cast to an int type.
-      load = _gvn.transform(new (C) CastP2XNode(NULL, load));
-      load = ConvX2UL(load);
+      p = _gvn.transform(new (C) CastP2XNode(NULL, p));
+      p = ConvX2UL(p);
       break;
     default:
       fatal(err_msg_res("unexpected type %d: %s", type, type2name(type)));
@@ -2835,7 +2822,7 @@ bool LibraryCallKit::inline_unsafe_access(bool is_native_ptr, bool is_store, Bas
     // following nodes will have the control of the MemBarCPUOrder inserted at
     // the end of this method.  So, pushing the load onto the stack at a later
     // point is fine.
-    set_result(load);
+    set_result(p);
   } else {
     // place effect of store into memory
     switch (type) {
@@ -2852,20 +2839,18 @@ bool LibraryCallKit::inline_unsafe_access(bool is_native_ptr, bool is_store, Bas
     MemNode::MemOrd mo = is_volatile ? MemNode::release : MemNode::unordered;
     if (type == T_OBJECT ) {
       val = shenandoah_read_barrier_storeval(val);
-      store = store_oop_to_unknown(control(), heap_base_oop, adr, adr_type, val, type, mo, mismatched);
+      (void) store_oop_to_unknown(control(), heap_base_oop, adr, adr_type, val, type, mo, mismatched);
     } else {
-      store = store_to_memory(control(), adr, val, type, adr_type, mo, is_volatile, unaligned, mismatched);
+      (void) store_to_memory(control(), adr, val, type, adr_type, mo, is_volatile, unaligned, mismatched);
     }
   }
 
   if (is_volatile) {
     if (!is_store) {
-      Node* mb = insert_mem_bar(Op_MemBarAcquire, load);
-      mb->as_MemBar()->set_trailing_load();
+      insert_mem_bar(Op_MemBarAcquire);
     } else {
       if (!support_IRIW_for_not_multiple_copy_atomic_cpu) {
-        Node* mb = insert_mem_bar(Op_MemBarVolatile, store);
-        MemBarNode::set_store_pair(leading_membar->as_MemBar(), mb->as_MemBar());
+        insert_mem_bar(Op_MemBarVolatile);
       }
     }
   }
@@ -3065,7 +3050,7 @@ bool LibraryCallKit::inline_unsafe_load_store(BasicType type, LoadStoreKind kind
   // into actual barriers on most machines, but we still need rest of
   // compiler to respect ordering.
 
-  Node* leading_membar = insert_mem_bar(Op_MemBarRelease);
+  insert_mem_bar(Op_MemBarRelease);
   insert_mem_bar(Op_MemBarCPUOrder);
 
   // 4984716: MemBars must be inserted before this
@@ -3166,8 +3151,6 @@ bool LibraryCallKit::inline_unsafe_load_store(BasicType type, LoadStoreKind kind
   Node* proj = _gvn.transform(new (C) SCMemProjNode(load_store));
   set_memory(proj, alias_idx);
 
-  Node* access = load_store;
-
   if (type == T_OBJECT && kind == LS_xchg) {
 #ifdef _LP64
     if (adr->bottom_type()->is_ptr_to_narrowoop()) {
@@ -3187,8 +3170,7 @@ bool LibraryCallKit::inline_unsafe_load_store(BasicType type, LoadStoreKind kind
 
   // Add the trailing membar surrounding the access
   insert_mem_bar(Op_MemBarCPUOrder);
-  Node* mb = insert_mem_bar(Op_MemBarAcquire, access);
-  MemBarNode::set_load_store_pair(leading_membar->as_MemBar(), mb->as_MemBar());
+  insert_mem_bar(Op_MemBarAcquire);
 
   assert(type2size[load_store->bottom_type()->basic_type()] == type2size[rtype], "result type should match");
   set_result(load_store);
@@ -3897,7 +3879,7 @@ Node* LibraryCallKit::generate_array_guard_common(Node* kls, RegionNode* region,
   }
   // Now test the correct condition.
   jint  nval = (obj_array
-                ? (jint)(Klass::_lh_array_tag_type_value
+                ? ((jint)Klass::_lh_array_tag_type_value
                    <<    Klass::_lh_array_tag_shift)
                 : Klass::_lh_neutral_value);
   Node* cmp = _gvn.transform(new(C) CmpINode(layout_val, intcon(nval)));
@@ -6495,9 +6477,8 @@ Node * LibraryCallKit::load_field_from_object(Node * fromObj, const char * field
     type = Type::get_const_basic_type(bt);
   }
 
-  Node* leading_membar = NULL;
   if (support_IRIW_for_not_multiple_copy_atomic_cpu && is_vol) {
-    leading_membar = insert_mem_bar(Op_MemBarVolatile);   // StoreLoad barrier
+    insert_mem_bar(Op_MemBarVolatile);   // StoreLoad barrier
   }
   // Build the load.
   MemNode::MemOrd mo = is_vol ? MemNode::acquire : MemNode::unordered;
@@ -6507,8 +6488,7 @@ Node * LibraryCallKit::load_field_from_object(Node * fromObj, const char * field
   // another volatile read.
   if (is_vol) {
     // Memory barrier includes bogus read of value to force load BEFORE membar
-    Node* mb = insert_mem_bar(Op_MemBarAcquire, loadedField);
-    mb->as_MemBar()->set_trailing_load();
+    insert_mem_bar(Op_MemBarAcquire, loadedField);
   }
   return loadedField;
 }
@@ -6968,18 +6948,10 @@ bool LibraryCallKit::inline_sha_implCompressMB(Node* digestBase_obj, ciInstanceK
   if (state == NULL) return false;
 
   // Call the stub.
-  Node *call;
-  if (CCallingConventionRequiresIntsAsLongs) {
-    call = make_runtime_call(RC_LEAF|RC_NO_FP,
-                             OptoRuntime::digestBase_implCompressMB_Type(),
-                             stubAddr, stubName, TypePtr::BOTTOM,
-                             src_start, state, ofs XTOP, limit XTOP);
-  } else {
-    call = make_runtime_call(RC_LEAF|RC_NO_FP,
-                             OptoRuntime::digestBase_implCompressMB_Type(),
-                             stubAddr, stubName, TypePtr::BOTTOM,
-                             src_start, state, ofs, limit);
-  }
+  Node* call = make_runtime_call(RC_LEAF|RC_NO_FP,
+                                 OptoRuntime::digestBase_implCompressMB_Type(),
+                                 stubAddr, stubName, TypePtr::BOTTOM,
+                                 src_start, state, ofs, limit);
   // return ofs (int)
   Node* result = _gvn.transform(new (C) ProjNode(call, TypeFunc::Parms));
   set_result(result);

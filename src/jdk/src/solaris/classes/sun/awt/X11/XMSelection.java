@@ -97,15 +97,7 @@ public class  XMSelection {
         XToolkit.awtLock();
         try {
             long root = XlibWrapper.RootWindow(display,screen);
-            XWindowAttributes wattr = new XWindowAttributes();
-            try {
-                XlibWrapper.XGetWindowAttributes(display, root, wattr.pData);
-                XlibWrapper.XSelectInput(display, root,
-                        XConstants.StructureNotifyMask |
-                        wattr.get_your_event_mask());
-            } finally {
-                wattr.dispose();
-            }
+            XlibWrapper.XSelectInput(display, root, XConstants.StructureNotifyMask);
             XToolkit.addEventDispatcher(root,
                     new XEventDispatcher() {
                         public void dispatchEvent(XEvent ev) {

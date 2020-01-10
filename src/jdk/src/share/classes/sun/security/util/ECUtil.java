@@ -89,7 +89,7 @@ public class ECUtil {
         return Arrays.copyOfRange(b, i, b.length);
     }
 
-    public static AlgorithmParameters getECParameters(Provider p) {
+    private static AlgorithmParameters getECParameters(Provider p) {
         try {
             if (p != null) {
                 return AlgorithmParameters.getInstance("EC", p);

@@ -34,13 +34,24 @@
 
 class ObjectMonitor;
 
+class ParallelObjectSynchronizerIterator VALUE_OBJ_CLASS_SPEC {
+  friend class ObjectSynchronizer;
+
+  private:
+    ObjectMonitor*  volatile _cur;
+
+  private:
+    ParallelObjectSynchronizerIterator(ObjectMonitor* head);
+    ObjectMonitor* claim();
+
+  public:
+    bool parallel_oops_do(OopClosure* f);
+};
+
 class ObjectSynchronizer : AllStatic {
   friend class VMStructs;
-#if INCLUDE_ALL_GCS
-  friend class ShenandoahSynchronizerIterator;
-#endif
-
-public:
+  friend class ParallelObjectSynchronizerIterator;
+ public:
   typedef enum {
     owner_self,
     owner_none,
@@ -123,6 +134,11 @@ public:
   static bool deflate_monitor(ObjectMonitor* mid, oop obj, ObjectMonitor** FreeHeadp,
                               ObjectMonitor** FreeTailp);
   static void oops_do(OopClosure* f);
+  // Process oops in thread local used monitors
+  static void thread_local_used_oops_do(Thread* thread, OopClosure* f);
+
+  // Parallel GC support
+  static ParallelObjectSynchronizerIterator parallel_iterator();
 
   // debugging
   static void sanity_checks(const bool verbose,
@@ -139,6 +155,13 @@ public:
   static ObjectMonitor * volatile gFreeList;
   static ObjectMonitor * volatile gOmInUseList; // for moribund thread, so monitors they inflated still get scanned
   static int gOmInUseCount;
+
+  // Process oops in all monitors
+  static void global_oops_do(OopClosure* f);
+  // Process oops in all global used monitors (i.e. moribund thread's monitors)
+  static void global_used_oops_do(OopClosure* f);
+  // Process oops in monitors on the given list
+  static void list_oops_do(ObjectMonitor* list, OopClosure* f);
 
 };
 

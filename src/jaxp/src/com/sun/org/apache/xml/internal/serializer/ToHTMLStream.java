@@ -1,5 +1,6 @@
 /*
- * Copyright (c) 2014, 2018, Oracle and/or its affiliates. All rights reserved.
+ * reserved comment block
+ * DO NOT REMOVE OR ALTER!
  */
 /*
  * Copyright 2001-2004 The Apache Software Foundation.
@@ -42,7 +43,6 @@ import org.xml.sax.SAXException;
  * because it is used from another package.
  *
  * @xsl.usage internal
- * @LastModified: Sept 2018
  */
 public final class ToHTMLStream extends ToStream
 {
@@ -1021,7 +1021,7 @@ public final class ToHTMLStream extends ToStream
         String name,
         String value,
         ElemDesc elemDesc)
-        throws IOException, SAXException
+        throws IOException
     {
         writer.write(' ');
 
@@ -1345,7 +1345,7 @@ public final class ToHTMLStream extends ToStream
      */
     public void writeAttrString(
         final java.io.Writer writer, String string, String encoding)
-        throws IOException, SAXException
+        throws IOException
     {
         final int end = string.length();
         if (end > m_attrBuff.length)
@@ -1397,16 +1397,13 @@ public final class ToHTMLStream extends ToStream
                 }
                 else
                 {
-                    if (Encodings.isHighUTF16Surrogate(ch) ||
-                            Encodings.isLowUTF16Surrogate(ch))
+                    if (Encodings.isHighUTF16Surrogate(ch))
                     {
-                        if (writeUTF16Surrogate(ch, chars, i, end) >= 0) {
-                            // move the index if the low surrogate is consumed
-                            // as writeUTF16Surrogate has written the pair
-                            if (Encodings.isHighUTF16Surrogate(ch)) {
-                                i++;
-                            }
-                        }
+
+                            writeUTF16Surrogate(ch, chars, i, end);
+                            i++; // two input characters processed
+                                 // this increments by one and the for()
+                                 // loop itself increments by another one.
                     }
 
                     // The next is kind of a hack to keep from escaping in the case

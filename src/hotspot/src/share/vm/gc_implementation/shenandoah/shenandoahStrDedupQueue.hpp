@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2018, Red Hat, Inc. All rights reserved.
+ * Copyright (c) 2017, 2018, Red Hat, Inc. and/or its affiliates.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
@@ -63,6 +63,7 @@ public:
 class ShenandoahStrDedupQueueSet;
 
 typedef ShenandoahStrDedupChunkedList<64> QueueChunkedList;
+
 
 class ShenandoahStrDedupQueue : public CHeapObj<mtGC> {
 private:
@@ -138,6 +139,7 @@ private:
   size_t claim();
 };
 
+
 class ShenandoahStrDedupQueueCleanupClosure : public OopClosure {
 private:
   ShenandoahHeap*   _heap;
@@ -147,7 +149,7 @@ private:
   inline void do_oop_work(T* p);
 public:
   ShenandoahStrDedupQueueCleanupClosure() : _heap(ShenandoahHeap::heap()),
-                                            _mark_context(ShenandoahHeap::heap()->marking_context()) {
+                                            _mark_context(ShenandoahHeap::heap()->next_marking_context()) {
   }
 
   inline void do_oop(oop* p)        { do_oop_work(p); }

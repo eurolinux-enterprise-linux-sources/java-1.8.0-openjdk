@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2016, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2012, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -68,21 +68,16 @@ final class X509TrustManagerImpl extends X509ExtendedTrustManager
 
     private static final Debug debug = Debug.getInstance("ssl");
 
-    X509TrustManagerImpl(String validatorType,
-            Collection<X509Certificate> trustedCerts) {
-
+    X509TrustManagerImpl(String validatorType, KeyStore ks)
+            throws KeyStoreException {
         this.validatorType = validatorType;
         this.pkixParams = null;
-
-        if (trustedCerts == null) {
+        if (ks == null) {
             trustedCerts = Collections.<X509Certificate>emptySet();
+        } else {
+            trustedCerts = KeyStores.getTrustedCerts(ks);
         }
-
-        this.trustedCerts = trustedCerts;
-
-        if (debug != null && Debug.isOn("trustmanager")) {
-            showTrustedCerts();
-        }
+        showTrustedCerts();
     }
 
     X509TrustManagerImpl(String validatorType, PKIXBuilderParameters params) {
@@ -95,10 +90,7 @@ final class X509TrustManagerImpl extends X509ExtendedTrustManager
         Validator v = getValidator(Validator.VAR_TLS_SERVER);
         trustedCerts = v.getTrustedCertificates();
         serverValidator = v;
-
-        if (debug != null && Debug.isOn("trustmanager")) {
-            showTrustedCerts();
-        }
+        showTrustedCerts();
     }
 
     @Override
@@ -145,7 +137,7 @@ final class X509TrustManagerImpl extends X509ExtendedTrustManager
     }
 
     private Validator checkTrustedInit(X509Certificate[] chain,
-            String authType, boolean checkClientTrusted) {
+                                        String authType, boolean isClient) {
         if (chain == null || chain.length == 0) {
             throw new IllegalArgumentException(
                 "null or zero-length certificate chain");
@@ -157,7 +149,7 @@ final class X509TrustManagerImpl extends X509ExtendedTrustManager
         }
 
         Validator v = null;
-        if (checkClientTrusted) {
+        if (isClient) {
             v = clientValidator;
             if (v == null) {
                 synchronized (this) {
@@ -187,10 +179,9 @@ final class X509TrustManagerImpl extends X509ExtendedTrustManager
     }
 
 
-    private void checkTrusted(X509Certificate[] chain,
-            String authType, Socket socket,
-            boolean checkClientTrusted) throws CertificateException {
-        Validator v = checkTrustedInit(chain, authType, checkClientTrusted);
+    private void checkTrusted(X509Certificate[] chain, String authType,
+                Socket socket, boolean isClient) throws CertificateException {
+        Validator v = checkTrustedInit(chain, authType, isClient);
 
         AlgorithmConstraints constraints = null;
         if ((socket != null) && socket.isConnected() &&
@@ -206,7 +197,8 @@ final class X509TrustManagerImpl extends X509ExtendedTrustManager
             String identityAlg = sslSocket.getSSLParameters().
                                         getEndpointIdentificationAlgorithm();
             if (identityAlg != null && identityAlg.length() != 0) {
-                checkIdentity(session, chain, identityAlg, checkClientTrusted);
+                checkIdentity(session, chain[0], identityAlg, isClient,
+                        getRequestedServerNames(socket));
             }
 
             // create the algorithm constraints
@@ -231,7 +223,7 @@ final class X509TrustManagerImpl extends X509ExtendedTrustManager
         }
 
         X509Certificate[] trustedChain = null;
-        if (checkClientTrusted) {
+        if (isClient) {
             trustedChain = validate(v, chain, constraints, null);
         } else {
             trustedChain = validate(v, chain, constraints, authType);
@@ -242,10 +234,9 @@ final class X509TrustManagerImpl extends X509ExtendedTrustManager
         }
     }
 
-    private void checkTrusted(X509Certificate[] chain,
-            String authType, SSLEngine engine,
-            boolean checkClientTrusted) throws CertificateException {
-        Validator v = checkTrustedInit(chain, authType, checkClientTrusted);
+    private void checkTrusted(X509Certificate[] chain, String authType,
+            SSLEngine engine, boolean isClient) throws CertificateException {
+        Validator v = checkTrustedInit(chain, authType, isClient);
 
         AlgorithmConstraints constraints = null;
         if (engine != null) {
@@ -258,7 +249,8 @@ final class X509TrustManagerImpl extends X509ExtendedTrustManager
             String identityAlg = engine.getSSLParameters().
                                         getEndpointIdentificationAlgorithm();
             if (identityAlg != null && identityAlg.length() != 0) {
-                checkIdentity(session, chain, identityAlg, checkClientTrusted);
+                checkIdentity(session, chain[0], identityAlg, isClient,
+                        getRequestedServerNames(engine));
             }
 
             // create the algorithm constraints
@@ -283,7 +275,7 @@ final class X509TrustManagerImpl extends X509ExtendedTrustManager
         }
 
         X509Certificate[] trustedChain = null;
-        if (checkClientTrusted) {
+        if (isClient) {
             trustedChain = validate(v, chain, constraints, null);
         } else {
             trustedChain = validate(v, chain, constraints, authType);
@@ -295,20 +287,22 @@ final class X509TrustManagerImpl extends X509ExtendedTrustManager
     }
 
     private void showTrustedCerts() {
-        for (X509Certificate cert : trustedCerts) {
-            System.out.println("adding as trusted cert:");
-            System.out.println("  Subject: "
-                                    + cert.getSubjectX500Principal());
-            System.out.println("  Issuer:  "
-                                    + cert.getIssuerX500Principal());
-            System.out.println("  Algorithm: "
-                                    + cert.getPublicKey().getAlgorithm()
-                                    + "; Serial number: 0x"
-                                    + cert.getSerialNumber().toString(16));
-            System.out.println("  Valid from "
-                                    + cert.getNotBefore() + " until "
-                                    + cert.getNotAfter());
-            System.out.println();
+        if (debug != null && Debug.isOn("trustmanager")) {
+            for (X509Certificate cert : trustedCerts) {
+                System.out.println("adding as trusted cert:");
+                System.out.println("  Subject: "
+                                        + cert.getSubjectX500Principal());
+                System.out.println("  Issuer:  "
+                                        + cert.getIssuerX500Principal());
+                System.out.println("  Algorithm: "
+                                        + cert.getPublicKey().getAlgorithm()
+                                        + "; Serial number: 0x"
+                                        + cert.getSerialNumber().toString(16));
+                System.out.println("  Valid from "
+                                        + cert.getNotBefore() + " until "
+                                        + cert.getNotAfter());
+                System.out.println();
+            }
         }
     }
 
@@ -373,8 +367,13 @@ final class X509TrustManagerImpl extends X509ExtendedTrustManager
         if (socket != null && socket.isConnected() &&
                                         socket instanceof SSLSocket) {
 
-            return getRequestedServerNames(
-                    ((SSLSocket)socket).getHandshakeSession());
+            SSLSocket sslSocket = (SSLSocket)socket;
+            SSLSession session = sslSocket.getHandshakeSession();
+
+            if (session != null && (session instanceof ExtendedSSLSession)) {
+                ExtendedSSLSession extSession = (ExtendedSSLSession)session;
+                return extSession.getRequestedServerNames();
+            }
         }
 
         return Collections.<SNIServerName>emptyList();
@@ -383,16 +382,12 @@ final class X509TrustManagerImpl extends X509ExtendedTrustManager
     // Also used by X509KeyManagerImpl
     static List<SNIServerName> getRequestedServerNames(SSLEngine engine) {
         if (engine != null) {
-            return getRequestedServerNames(engine.getHandshakeSession());
-        }
+            SSLSession session = engine.getHandshakeSession();
 
-        return Collections.<SNIServerName>emptyList();
-    }
-
-    private static List<SNIServerName> getRequestedServerNames(
-            SSLSession session) {
-        if (session != null && (session instanceof ExtendedSSLSession)) {
-            return ((ExtendedSSLSession)session).getRequestedServerNames();
+            if (session != null && (session instanceof ExtendedSSLSession)) {
+                ExtendedSSLSession extSession = (ExtendedSSLSession)session;
+                return extSession.getRequestedServerNames();
+            }
         }
 
         return Collections.<SNIServerName>emptyList();
@@ -413,23 +408,22 @@ final class X509TrustManagerImpl extends X509ExtendedTrustManager
      * the identity checking aginst the server_name extension if present, and
      * may failove to peer host checking.
      */
-    static void checkIdentity(SSLSession session,
-            X509Certificate [] trustedChain,
+    private static void checkIdentity(SSLSession session,
+            X509Certificate cert,
             String algorithm,
-            boolean checkClientTrusted) throws CertificateException {
+            boolean isClient,
+            List<SNIServerName> sniNames) throws CertificateException {
 
         boolean identifiable = false;
         String peerHost = session.getPeerHost();
-        if (!checkClientTrusted) {
-            List<SNIServerName> sniNames = getRequestedServerNames(session);
-            String sniHostName = getHostNameInSNI(sniNames);
-            if (sniHostName != null) {
+        if (isClient) {
+            String hostname = getHostNameInSNI(sniNames);
+            if (hostname != null) {
                 try {
-                    checkIdentity(sniHostName,
-                            trustedChain[0], algorithm);
+                    checkIdentity(hostname, cert, algorithm);
                     identifiable = true;
                 } catch (CertificateException ce) {
-                    if (sniHostName.equalsIgnoreCase(peerHost)) {
+                    if (hostname.equalsIgnoreCase(peerHost)) {
                         throw ce;
                     }
 
@@ -439,8 +433,7 @@ final class X509TrustManagerImpl extends X509ExtendedTrustManager
         }
 
         if (!identifiable) {
-            checkIdentity(peerHost,
-                    trustedChain[0], algorithm);
+            checkIdentity(peerHost, cert, algorithm);
         }
     }
 

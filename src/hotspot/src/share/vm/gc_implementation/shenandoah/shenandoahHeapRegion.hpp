@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2018, Red Hat, Inc. All rights reserved.
+ * Copyright (c) 2013, 2017, Red Hat, Inc. and/or its affiliates.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
@@ -25,10 +25,6 @@
 #define SHARE_VM_GC_SHENANDOAH_SHENANDOAHHEAPREGION_HPP
 
 #include "memory/space.hpp"
-#include "gc_implementation/shenandoah/shenandoahAllocRequest.hpp"
-#include "gc_implementation/shenandoah/shenandoahAsserts.hpp"
-#include "gc_implementation/shenandoah/shenandoahHeap.hpp"
-#include "gc_implementation/shenandoah/shenandoahPacer.hpp"
 
 class VMStructs;
 
@@ -113,7 +109,7 @@ private:
     _cset,                    // region is in collection set
     _pinned,                  // region is pinned
     _pinned_cset,             // region is pinned and in cset (evac failure path)
-    _trash                    // region contains only trash
+    _trash,                   // region contains only trash
   };
 
   const char* region_state_to_string(RegionState s) const {
@@ -167,7 +163,6 @@ public:
   void make_unpinned();
   void make_cset();
   void make_trash();
-  void make_trash_immediate();
   void make_empty();
   void make_uncommitted();
   void make_committed_bypass();
@@ -208,35 +203,29 @@ private:
   static size_t MaxTLABSizeBytes;
   static size_t MaxTLABSizeWords;
 
-  // Never updated fields
+private:
   ShenandoahHeap* _heap;
-  MemRegion _reserved;
   size_t _region_number;
+  volatile jint _live_data;
+  MemRegion _reserved;
 
-  // Rarely updated fields
-  HeapWord* _new_top;
-  size_t _critical_pins;
-  double _empty_time;
-
-  // Seldom updated fields
-  RegionState _state;
-
-  // Frequently updated fields
   size_t _tlab_allocs;
   size_t _gclab_allocs;
   size_t _shared_allocs;
 
-  volatile jint _live_data;
+  HeapWord* _new_top;
 
-  // Claim some space at the end to protect next region
-  char _pad0[DEFAULT_CACHE_LINE_SIZE];
+  size_t _critical_pins;
+
+  RegionState _state;
+  double _empty_time;
+
+  ShenandoahPacer* _pacer;
 
 public:
   ShenandoahHeapRegion(ShenandoahHeap* heap, HeapWord* start, size_t size_words, size_t index, bool committed);
 
-  static const size_t MIN_NUM_REGIONS = 10;
-
-  static void setup_sizes(size_t max_heap_size);
+  static void setup_sizes(size_t initial_heap_size, size_t max_heap_size);
 
   double empty_time() {
     return _empty_time;
@@ -317,9 +306,16 @@ public:
   size_t region_number() const;
 
   // Allocation (return NULL if full)
-  inline HeapWord* allocate(size_t word_size, ShenandoahAllocRequest::Type type);
+  inline HeapWord* allocate(size_t word_size, ShenandoahHeap::AllocType type);
+  HeapWord* allocate(size_t word_size) {
+    // ContiguousSpace wants us to have this method. But it is an error to call this with Shenandoah.
+    ShouldNotCallThis();
+    return NULL;
+  }
 
-  HeapWord* allocate(size_t word_size) shenandoah_not_implemented_return(NULL)
+  // Roll back the previous allocation of an object with specified size.
+  // Returns TRUE when successful, FALSE if not successful or not supported.
+  bool rollback_allocation(uint size);
 
   void clear_live_data();
   void set_live_data(size_t s);
@@ -340,10 +336,14 @@ public:
 
   void recycle();
 
-  void oop_iterate_skip_unreachable(ExtendedOopClosure* cl, bool skip_unreachable_objects) shenandoah_not_implemented;
-  HeapWord* object_iterate_careful(ObjectClosureCareful* cl) shenandoah_not_implemented_return(NULL);
+  void oop_iterate_skip_unreachable(ExtendedOopClosure* cl, bool skip_unreachable_objects);
+
+  HeapWord* object_iterate_careful(ObjectClosureCareful* cl);
 
   HeapWord* block_start_const(const void* p) const;
+
+  // Just before GC we need to fill the current region.
+  void fill_region();
 
   bool in_collection_set() const;
 
@@ -353,7 +353,7 @@ public:
   void set_new_top(HeapWord* new_top) { _new_top = new_top; }
   HeapWord* new_top() const { return _new_top; }
 
-  inline void adjust_alloc_metadata(ShenandoahAllocRequest::Type type, size_t);
+  inline void adjust_alloc_metadata(ShenandoahHeap::AllocType type, size_t);
   void reset_alloc_metadata_to_shared();
   void reset_alloc_metadata();
   size_t get_shared_allocs() const;

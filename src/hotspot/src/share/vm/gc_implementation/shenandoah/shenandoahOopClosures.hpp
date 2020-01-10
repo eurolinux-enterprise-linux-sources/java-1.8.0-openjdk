@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2018, Red Hat, Inc. All rights reserved.
+ * Copyright (c) 2015, Red Hat, Inc. and/or its affiliates.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
@@ -37,11 +37,6 @@ enum UpdateRefsMode {
   CONCURRENT  // Reference updating using CAS
 };
 
-enum StringDedupMode {
-  NO_DEDUP,      // Do not do anything for String deduplication
-  ENQUEUE_DEDUP  // Enqueue candidate Strings for deduplication
-};
-
 class ShenandoahMarkRefsSuperClosure : public MetadataAwareOopClosure {
 private:
   ShenandoahObjToScanQueue* _queue;
@@ -53,7 +48,7 @@ public:
   ShenandoahMarkRefsSuperClosure(ShenandoahObjToScanQueue* q, ReferenceProcessor* rp);
   ShenandoahMarkRefsSuperClosure(ShenandoahObjToScanQueue* q, ShenandoahStrDedupQueue* dq, ReferenceProcessor* rp);
 
-  template <class T, UpdateRefsMode UPDATE_MODE, StringDedupMode STRING_DEDUP>
+  template <class T, UpdateRefsMode UPDATE_MODE, bool STRING_DEDUP>
   void work(T *p);
 };
 
@@ -63,7 +58,7 @@ public:
           ShenandoahMarkRefsSuperClosure(q, rp) {};
 
   template <class T>
-  inline void do_oop_nv(T* p)       { work<T, CONCURRENT, NO_DEDUP>(p); }
+  inline void do_oop_nv(T* p)       { work<T, CONCURRENT, false /* string dedup */>(p); }
   virtual void do_oop(narrowOop* p) { do_oop_nv(p); }
   virtual void do_oop(oop* p)       { do_oop_nv(p); }
   inline bool do_metadata_nv()      { return false; }
@@ -76,7 +71,7 @@ public:
           ShenandoahMarkRefsSuperClosure(q, dq, rp) {};
 
   template <class T>
-  inline void do_oop_nv(T* p)       { work<T, CONCURRENT, ENQUEUE_DEDUP>(p); }
+  inline void do_oop_nv(T* p)       { work<T, CONCURRENT, true /* string dedup */>(p); }
   virtual void do_oop(narrowOop* p) { do_oop_nv(p); }
   virtual void do_oop(oop* p)       { do_oop_nv(p); }
   inline bool do_metadata_nv()      { return false; }
@@ -89,7 +84,7 @@ public:
     ShenandoahMarkRefsSuperClosure(q, rp) {};
 
   template <class T>
-  inline void do_oop_nv(T* p)       { work<T, CONCURRENT, NO_DEDUP>(p); }
+  inline void do_oop_nv(T* p)       { work<T, CONCURRENT, false /* string dedup */>(p); }
   virtual void do_oop(narrowOop* p) { do_oop_nv(p); }
   virtual void do_oop(oop* p)       { do_oop_nv(p); }
   inline bool do_metadata_nv()      { return true; }
@@ -102,7 +97,7 @@ public:
   ShenandoahMarkRefsSuperClosure(q, dq, rp) {};
 
   template <class T>
-  inline void do_oop_nv(T* p)       { work<T, CONCURRENT, ENQUEUE_DEDUP>(p); }
+  inline void do_oop_nv(T* p)       { work<T, CONCURRENT, true /* string dedup */>(p); }
   virtual void do_oop(narrowOop* p) { do_oop_nv(p); }
   virtual void do_oop(oop* p)       { do_oop_nv(p); }
   inline bool do_metadata_nv()      { return true; }
@@ -115,7 +110,7 @@ public:
     ShenandoahMarkRefsSuperClosure(q, rp) {};
 
   template <class T>
-  inline void do_oop_nv(T* p)       { work<T, NONE, NO_DEDUP>(p); }
+  inline void do_oop_nv(T* p)       { work<T, NONE, false /* string dedup */>(p); }
   virtual void do_oop(narrowOop* p) { do_oop_nv(p); }
   virtual void do_oop(oop* p)       { do_oop_nv(p); }
   inline bool do_metadata_nv()      { return false; }
@@ -128,7 +123,7 @@ public:
     ShenandoahMarkRefsSuperClosure(q, dq, rp) {};
 
   template <class T>
-  inline void do_oop_nv(T* p)       { work<T, NONE, ENQUEUE_DEDUP>(p); }
+  inline void do_oop_nv(T* p)       { work<T, NONE, true /* string dedup */>(p); }
   virtual void do_oop(narrowOop* p) { do_oop_nv(p); }
   virtual void do_oop(oop* p)       { do_oop_nv(p); }
   inline bool do_metadata_nv()      { return false; }
@@ -141,7 +136,7 @@ public:
     ShenandoahMarkRefsSuperClosure(q, rp) {};
 
   template <class T>
-  inline void do_oop_nv(T* p)       { work<T, RESOLVE, NO_DEDUP>(p); }
+  inline void do_oop_nv(T* p)       { work<T, RESOLVE, false /* string dedup */>(p); }
   virtual void do_oop(narrowOop* p) { do_oop_nv(p); }
   virtual void do_oop(oop* p)       { do_oop_nv(p); }
   inline bool do_metadata_nv()      { return false; }
@@ -154,7 +149,7 @@ public:
     ShenandoahMarkRefsSuperClosure(q, dq, rp) {};
 
   template <class T>
-  inline void do_oop_nv(T* p)       { work<T, RESOLVE, ENQUEUE_DEDUP>(p); }
+  inline void do_oop_nv(T* p)       { work<T, RESOLVE, true /* string dedup */>(p); }
   virtual void do_oop(narrowOop* p) { do_oop_nv(p); }
   virtual void do_oop(oop* p)       { do_oop_nv(p); }
   inline bool do_metadata_nv()      { return false; }
@@ -167,7 +162,7 @@ public:
     ShenandoahMarkRefsSuperClosure(q, rp) {};
 
   template <class T>
-  inline void do_oop_nv(T* p)       { work<T, NONE, NO_DEDUP>(p); }
+  inline void do_oop_nv(T* p)       { work<T, NONE, false /* string dedup */>(p); }
   virtual void do_oop(narrowOop* p) { do_oop_nv(p); }
   virtual void do_oop(oop* p)       { do_oop_nv(p); }
   inline bool do_metadata_nv()      { return true; }
@@ -180,7 +175,7 @@ public:
     ShenandoahMarkRefsSuperClosure(q, dq, rp) {};
 
   template <class T>
-  inline void do_oop_nv(T* p)       { work<T, NONE, ENQUEUE_DEDUP>(p); }
+  inline void do_oop_nv(T* p)       { work<T, NONE, true /* string dedup */>(p); }
   virtual void do_oop(narrowOop* p) { do_oop_nv(p); }
   virtual void do_oop(oop* p)       { do_oop_nv(p); }
   inline bool do_metadata_nv()      { return true; }
@@ -199,5 +194,6 @@ public:
   virtual void do_oop(narrowOop* p) { do_oop_nv(p); }
   virtual void do_oop(oop* p)       { do_oop_nv(p); }
 };
+
 
 #endif // SHARE_VM_GC_SHENANDOAH_SHENANDOAHOOPCLOSURES_HPP

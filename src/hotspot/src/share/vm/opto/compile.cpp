@@ -32,7 +32,7 @@
 #include "compiler/compileLog.hpp"
 #include "compiler/disassembler.hpp"
 #include "compiler/oopMap.hpp"
-#include "gc_implementation/shenandoah/shenandoahBrooksPointer.hpp"
+#include "gc_implementation/shenandoah/brooksPointer.hpp"
 #include "opto/addnode.hpp"
 #include "opto/block.hpp"
 #include "opto/c2compiler.hpp"
@@ -83,6 +83,10 @@
 # include "adfiles/ad_zero.hpp"
 #elif defined TARGET_ARCH_MODEL_ppc_64
 # include "adfiles/ad_ppc_64.hpp"
+#endif
+
+#ifdef BUILTIN_SIM
+#include "../../../../../../simulator/simulator.hpp"
 #endif
 
 // -------------------- Compile::mach_constant_base_node -----------------------
@@ -937,6 +941,37 @@ Compile::Compile( ciEnv* ci_env, C2Compiler* compiler, ciMethod* target, int osr
       _code_offsets.set_value(CodeOffsets::OSR_Entry, 0);
     }
 
+#ifdef BUILTIN_SIM
+    char *method_name = NULL;
+    AArch64Simulator *sim = NULL;
+    size_t len = 65536;
+    if (NotifySimulator) {
+      method_name = new char[len];
+    }
+    if (method_name) {
+      unsigned char *entry = code_buffer()->insts_begin();
+      stringStream st(method_name, 400);
+      if (_entry_bci != InvocationEntryBci) {
+        st.print("osr:");
+      }
+      _method->holder()->name()->print_symbol_on(&st);
+      // convert '/' separators in class name into '.' separator
+      for (unsigned i = 0; i < len; i++) {
+        if (method_name[i] == '/') {
+          method_name[i] = '.';
+        } else if (method_name[i] == '\0') {
+          break;
+        }
+      }
+      st.print(".");
+      _method->name()->print_symbol_on(&st);
+      _method->signature()->as_symbol()->print_symbol_on(&st);
+      sim = AArch64Simulator::get_current(UseSimulatorCache, DisableBCCheck);
+      sim->notifyCompile(method_name, entry);
+      sim->notifyRelocate(entry, 0);
+    }
+#endif
+
     env()->register_method(_method, _entry_bci,
                            &_code_offsets,
                            _orig_pc_slot_offset_in_bytes,
@@ -1421,7 +1456,7 @@ const TypePtr *Compile::flatten_alias_type( const TypePtr *tj ) const {
         tj = TypeInstPtr::MARK;
         ta = TypeAryPtr::RANGE; // generic ignored junk
         ptr = TypePtr::BotPTR;
-      } else if (offset == ShenandoahBrooksPointer::byte_offset() && UseShenandoahGC) {
+      } else if (offset == BrooksPointer::byte_offset() && UseShenandoahGC) {
         // Need to distinguish brooks ptr as is.
         tj = ta = TypeAryPtr::make(ptr,ta->ary(),ta->klass(),false,offset);
       } else {                  // Random constant offset into array body
@@ -1488,7 +1523,7 @@ const TypePtr *Compile::flatten_alias_type( const TypePtr *tj ) const {
       if (!is_known_inst) { // Do it only for non-instance types
         tj = to = TypeInstPtr::make(TypePtr::BotPTR, env()->Object_klass(), false, NULL, offset);
       }
-    } else if ((offset != ShenandoahBrooksPointer::byte_offset() || !UseShenandoahGC) && (offset < 0 || offset >= k->size_helper() * wordSize)) {
+    } else if ((offset != BrooksPointer::byte_offset() || !UseShenandoahGC) && (offset < 0 || offset >= k->size_helper() * wordSize)) {
       // Static fields are in the space above the normal instance
       // fields in the java.lang.Class instance.
       if (to->klass() != ciEnv::current()->Class_klass()) {
@@ -1587,7 +1622,7 @@ const TypePtr *Compile::flatten_alias_type( const TypePtr *tj ) const {
           (offset == oopDesc::mark_offset_in_bytes() && tj->base() == Type::AryPtr) ||
           (offset == oopDesc::klass_offset_in_bytes() && tj->base() == Type::AryPtr) ||
           (offset == arrayOopDesc::length_offset_in_bytes() && tj->base() == Type::AryPtr) ||
-          (offset == ShenandoahBrooksPointer::byte_offset() && tj->base() == Type::AryPtr && UseShenandoahGC),
+          (offset == BrooksPointer::byte_offset() && tj->base() == Type::AryPtr && UseShenandoahGC),
           "For oops, klasses, raw offset must be constant; for arrays the offset is never known" );
   assert( tj->ptr() != TypePtr::TopPTR &&
           tj->ptr() != TypePtr::AnyNull &&
@@ -2685,17 +2720,6 @@ void Compile::final_graph_reshaping_impl( Node *n, Final_Reshape_Counts &frc) {
                              LoadNode::is_immutable_value(n->in(MemNode::Address))),
             "raw memory operations should have control edge");
   }
-  if (n->is_MemBar()) {
-    MemBarNode* mb = n->as_MemBar();
-    if (mb->trailing_store() || mb->trailing_load_store()) {
-      assert(mb->leading_membar()->trailing_membar() == mb, "bad membar pair");
-      Node* mem = mb->in(MemBarNode::Precedent);
-      assert((mb->trailing_store() && mem->is_Store() && mem->as_Store()->is_release()) ||
-             (mb->trailing_load_store() && mem->is_LoadStore()), "missing mem op");
-    } else if (mb->leading()) {
-      assert(mb->trailing_membar()->leading_membar() == mb, "bad membar pair");
-    }
-  }
 #endif
   // Count FPU ops and common calls, implements item (3)
   switch( nop ) {
@@ -3648,9 +3672,7 @@ void Compile::verify_barriers() {
             if (cmp->Opcode() == Op_CmpI && cmp->in(2)->is_Con() && cmp->in(2)->bottom_type()->is_int()->get_con() == 0
                 && cmp->in(1)->is_Load()) {
               LoadNode* load = cmp->in(1)->as_Load();
-              if (load->Opcode() == Op_LoadB && load->in(2)->is_AddP() && load->in(2)->in(2)->Opcode() == Op_ThreadLocal
-                  && load->in(2)->in(3)->is_Con()
-                  && load->in(2)->in(3)->bottom_type()->is_intptr_t()->get_con() == marking_offset) {
+              if (load->is_g1_marking_load()) {
 
                 Node* if_ctrl = iff->in(0);
                 Node* load_ctrl = load->in(0);

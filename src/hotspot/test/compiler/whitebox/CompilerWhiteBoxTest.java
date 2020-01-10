@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2018, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -41,19 +41,19 @@ import java.util.function.Function;
  */
 public abstract class CompilerWhiteBoxTest {
     /** {@code CompLevel::CompLevel_none} -- Interpreter */
-    protected static final int COMP_LEVEL_NONE = 0;
+    protected static int COMP_LEVEL_NONE = 0;
     /** {@code CompLevel::CompLevel_any}, {@code CompLevel::CompLevel_all} */
-    protected static final int COMP_LEVEL_ANY = -1;
+    protected static int COMP_LEVEL_ANY = -1;
     /** {@code CompLevel::CompLevel_simple} -- C1 */
-    protected static final int COMP_LEVEL_SIMPLE = 1;
+    protected static int COMP_LEVEL_SIMPLE = 1;
     /** {@code CompLevel::CompLevel_limited_profile} -- C1, invocation &amp; backedge counters */
-    protected static final int COMP_LEVEL_LIMITED_PROFILE = 2;
+    protected static int COMP_LEVEL_LIMITED_PROFILE = 2;
     /** {@code CompLevel::CompLevel_full_profile} -- C1, invocation &amp; backedge counters + mdo */
-    protected static final int COMP_LEVEL_FULL_PROFILE = 3;
+    protected static int COMP_LEVEL_FULL_PROFILE = 3;
     /** {@code CompLevel::CompLevel_full_optimization} -- C2 or Shark */
-    protected static final int COMP_LEVEL_FULL_OPTIMIZATION = 4;
+    protected static int COMP_LEVEL_FULL_OPTIMIZATION = 4;
     /** Maximal value for CompLevel */
-    protected static final int COMP_LEVEL_MAX = COMP_LEVEL_FULL_OPTIMIZATION;
+    protected static int COMP_LEVEL_MAX = COMP_LEVEL_FULL_OPTIMIZATION;
 
     /** Instance of WhiteBox */
     protected static final WhiteBox WHITE_BOX = WhiteBox.getWhiteBox();
@@ -328,11 +328,11 @@ public abstract class CompilerWhiteBoxTest {
             return;
         }
         final Object obj = new Object();
-        for (int i = 0; i < 100
+        for (int i = 0; i < 10
                 && WHITE_BOX.isMethodQueuedForCompilation(executable); ++i) {
             synchronized (obj) {
                 try {
-                    obj.wait(100);
+                    obj.wait(1000);
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                 }
@@ -347,22 +347,14 @@ public abstract class CompilerWhiteBoxTest {
         System.out.printf("%n%s:%n", method);
         System.out.printf("\tcompilable:\t%b%n",
                 WHITE_BOX.isMethodCompilable(method, COMP_LEVEL_ANY, false));
-        boolean isCompiled = WHITE_BOX.isMethodCompiled(method, false);
-        System.out.printf("\tcompiled:\t%b%n", isCompiled);
-        if (isCompiled) {
-            System.out.printf("\tcompile_id:\t%d%n",
-                    NMethod.get(method, false).compile_id);
-        }
+        System.out.printf("\tcompiled:\t%b%n",
+                WHITE_BOX.isMethodCompiled(method, false));
         System.out.printf("\tcomp_level:\t%d%n",
                 WHITE_BOX.getMethodCompilationLevel(method, false));
         System.out.printf("\tosr_compilable:\t%b%n",
                 WHITE_BOX.isMethodCompilable(method, COMP_LEVEL_ANY, true));
-        isCompiled = WHITE_BOX.isMethodCompiled(method, true);
-        System.out.printf("\tosr_compiled:\t%b%n", isCompiled);
-        if (isCompiled) {
-            System.out.printf("\tosr_compile_id:\t%d%n",
-                    NMethod.get(method, true).compile_id);
-        }
+        System.out.printf("\tosr_compiled:\t%b%n",
+                WHITE_BOX.isMethodCompiled(method, true));
         System.out.printf("\tosr_comp_level:\t%d%n",
                 WHITE_BOX.getMethodCompilationLevel(method, true));
         System.out.printf("\tin_queue:\t%b%n",
@@ -444,22 +436,6 @@ public abstract class CompilerWhiteBoxTest {
                     testCase.name(), CompilerWhiteBoxTest.MODE);
         }
         return result;
-    }
-
-    /**
-     * Skip the test for the specified value of Tiered Compilation
-     * @param value of TieredCompilation the test should not run with
-     * @return {@code true} if the test should be skipped,
-     *         {@code false} otherwise
-     */
-    protected static boolean skipOnTieredCompilation(boolean value) {
-        if (value == CompilerWhiteBoxTest.TIERED_COMPILATION) {
-            System.err.println("Test isn't applicable w/ "
-                    + (value ? "enabled" : "disabled")
-                    + "TieredCompilation. Skip test.");
-            return true;
-        }
-        return false;
     }
 }
 

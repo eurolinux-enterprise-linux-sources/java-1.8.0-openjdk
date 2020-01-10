@@ -27,8 +27,8 @@
 #include "precompiled.hpp"
 #include "asm/macroAssembler.hpp"
 #include "asm/macroAssembler.inline.hpp"
+#include "gc_implementation/shenandoah/brooksPointer.hpp"
 #include "gc_implementation/shenandoah/shenandoahBarrierSet.hpp"
-#include "gc_implementation/shenandoah/shenandoahBrooksPointer.hpp"
 #include "gc_implementation/shenandoah/shenandoahHeap.hpp"
 #include "gc_implementation/shenandoah/shenandoahHeapRegion.hpp"
 #include "interpreter/interpreter.hpp"
@@ -50,6 +50,10 @@
 
 #ifdef COMPILER2
 #include "opto/runtime.hpp"
+#endif
+
+#ifdef BUILTIN_SIM
+#include "../../../../../../simulator/simulator.hpp"
 #endif
 
 // Declaration and definition of StubGenerator (no .hpp file).
@@ -219,8 +223,16 @@ class StubGenerator: public StubCodeGenerator {
 
     // stub code
 
+    // we need a C prolog to bootstrap the x86 caller into the sim
+    __ c_stub_prolog(8, 0, MacroAssembler::ret_type_void);
+
     address aarch64_entry = __ pc();
 
+#ifdef BUILTIN_SIM
+    // Save sender's SP for stack traces.
+    __ mov(rscratch1, sp);
+    __ str(rscratch1, Address(__ pre(sp, -2 * wordSize)));
+#endif
     // set up frame and move sp to end of save area
     __ enter();
     __ sub(sp, rfp, -sp_after_call_off * wordSize);
@@ -291,6 +303,8 @@ class StubGenerator: public StubCodeGenerator {
     __ mov(r13, sp);
     __ blr(c_rarg4);
 
+    // tell the simulator we have returned to the stub
+
     // we do this here because the notify will already have been done
     // if we get to the next instruction via an exception
     //
@@ -300,6 +314,9 @@ class StubGenerator: public StubCodeGenerator {
     // pc against the address saved below. so we may need to allow for
     // this extra instruction in the check.
 
+    if (NotifySimulator) {
+      __ notify(Assembler::method_reentry);
+    }
     // save current address for use by exception handling code
 
     return_address = __ pc();
@@ -362,6 +379,12 @@ class StubGenerator: public StubCodeGenerator {
     __ ldp(c_rarg4, c_rarg5,  entry_point);
     __ ldp(c_rarg6, c_rarg7,  parameter_size);
 
+#ifndef PRODUCT
+    // tell the simulator we are about to end Java execution
+    if (NotifySimulator) {
+      __ notify(Assembler::method_exit);
+    }
+#endif
     // leave frame and return to caller
     __ leave();
     __ ret(lr);
@@ -394,6 +417,13 @@ class StubGenerator: public StubCodeGenerator {
   // rsp.
   //
   // r0: exception oop
+
+  // NOTE: this is used as a target from the signal handler so it
+  // needs an x86 prolog which returns into the current simulator
+  // executing the generated catch_exception code. so the prolog
+  // needs to install rax in a sim register and adjust the sim's
+  // restart pc to enter the generated code at the start position
+  // then return from native to simulated execution.
 
   address generate_catch_exception() {
     StubCodeMark mark(this, "StubRoutines", "catch_exception");
@@ -559,7 +589,7 @@ class StubGenerator: public StubCodeGenerator {
     }
 
     __ mov(lr, CAST_FROM_FN_PTR(address, ShenandoahBarrierSet::write_barrier_JRT));
-    __ blr(lr);
+    __ blrt(lr, 1, 0, MacroAssembler::ret_type_integral);
     if (!c_abi) {
       __ mov(rscratch1, obj);
       __ pop_call_clobbered_registers();
@@ -641,7 +671,7 @@ class StubGenerator: public StubCodeGenerator {
 #endif
     BLOCK_COMMENT("call MacroAssembler::debug");
     __ mov(rscratch1, CAST_FROM_FN_PTR(address, MacroAssembler::debug64));
-    __ blr(rscratch1);
+    __ blrt(rscratch1, 3, 0, 1);
 
     return start;
   }
@@ -659,7 +689,6 @@ class StubGenerator: public StubCodeGenerator {
   void  gen_write_ref_array_pre_barrier(Register addr, Register count, bool dest_uninitialized) {
     BarrierSet* bs = Universe::heap()->barrier_set();
     switch (bs->kind()) {
-    case BarrierSet::G1SATBCT:
     case BarrierSet::G1SATBCTLogging:
     case BarrierSet::ShenandoahBarrierSet:
       // Don't generate the call if we statically know that the target is uninitialized
@@ -693,6 +722,7 @@ class StubGenerator: public StubCodeGenerator {
     }
   }
 
+
   //
   // Generate code for an array write post barrier
   //
@@ -710,7 +740,6 @@ class StubGenerator: public StubCodeGenerator {
       case BarrierSet::G1SATBCT:
       case BarrierSet::G1SATBCTLogging:
       case BarrierSet::ShenandoahBarrierSet:
-
         {
 	  __ push_call_clobbered_registers();
           // must compute element count unless barrier set interface is changed (other platforms supply count)
@@ -830,11 +859,8 @@ class StubGenerator: public StubCodeGenerator {
       stub_name = "foward_copy_longs";
     else
       stub_name = "backward_copy_longs";
-
-    __ align(CodeEntryAlignment);
-
     StubCodeMark mark(this, "StubRoutines", stub_name);
-
+    __ align(CodeEntryAlignment);
     __ bind(start);
 
     Label unaligned_copy_long;
@@ -1475,6 +1501,12 @@ class StubGenerator: public StubCodeGenerator {
     __ leave();
     __ mov(r0, zr); // return 0
     __ ret(lr);
+#ifdef BUILTIN_SIM
+    {
+      AArch64Simulator *sim = AArch64Simulator::get_current(UseSimulatorCache, DisableBCCheck);
+      sim->notifyCompile(const_cast<char*>(name), start);
+    }
+#endif
     return start;
   }
 
@@ -1531,6 +1563,12 @@ class StubGenerator: public StubCodeGenerator {
     __ leave();
     __ mov(r0, zr); // return 0
     __ ret(lr);
+#ifdef BUILTIN_SIM
+    {
+      AArch64Simulator *sim = AArch64Simulator::get_current(UseSimulatorCache, DisableBCCheck);
+      sim->notifyCompile(const_cast<char*>(name), start);
+    }
+#endif
     return start;
 }
 
@@ -2187,10 +2225,9 @@ class StubGenerator: public StubCodeGenerator {
     const Register dst_pos    = c_rarg3;  // destination position
     const Register length     = c_rarg4;
 
-    __ align(CodeEntryAlignment);
-
     StubCodeMark mark(this, "StubRoutines", name);
 
+    __ align(CodeEntryAlignment);
     address start = __ pc();
 
     __ enter(); // required for proper stackwalking of RuntimeStub frame
@@ -2507,11 +2544,11 @@ class StubGenerator: public StubCodeGenerator {
                                      /*dest_uninitialized*/false);
       // Aligned versions without pre-barriers
       StubRoutines::_arrayof_oop_disjoint_arraycopy_uninit
-	= generate_disjoint_oop_copy(aligned, &entry, "arrayof_oop_disjoint_arraycopy_uninit",
-				     /*dest_uninitialized*/true);
+        = generate_disjoint_oop_copy(aligned, &entry, "arrayof_oop_disjoint_arraycopy_uninit",
+                                     /*dest_uninitialized*/true);
       StubRoutines::_arrayof_oop_arraycopy_uninit
-	= generate_conjoint_oop_copy(aligned, entry, NULL, "arrayof_oop_arraycopy_uninit",
-				     /*dest_uninitialized*/true);
+        = generate_conjoint_oop_copy(aligned, entry, NULL, "arrayof_oop_arraycopy_uninit",
+                                     /*dest_uninitialized*/true);
     }
 
     StubRoutines::_oop_disjoint_arraycopy            = StubRoutines::_arrayof_oop_disjoint_arraycopy;
@@ -3170,6 +3207,7 @@ class StubGenerator: public StubCodeGenerator {
     return start;
   }
 
+#ifndef BUILTIN_SIM
   // Safefetch stubs.
   void generate_safefetch(const char* name, int size, address* entry,
                           address* fault_pc, address* continuation_pc) {
@@ -3209,6 +3247,7 @@ class StubGenerator: public StubCodeGenerator {
     __ mov(r0, c_rarg1);
     __ ret(lr);
   }
+#endif
 
   /**
    *  Arguments:
@@ -3368,7 +3407,7 @@ class StubGenerator: public StubCodeGenerator {
     __ mov(c_rarg0, rthread);
     BLOCK_COMMENT("call runtime_entry");
     __ mov(rscratch1, runtime_entry);
-    __ blr(rscratch1);
+    __ blrt(rscratch1, 3 /* number_of_arguments */, 0, 1);
 
     // Generate oop map
     OopMap* map = new OopMap(framesize, 0);
@@ -4298,9 +4337,10 @@ class StubGenerator: public StubCodeGenerator {
 
     if (UseShenandoahGC && ShenandoahWriteBarrier) {
       StubRoutines::aarch64::_shenandoah_wb = generate_shenandoah_wb(false, true);
-      StubRoutines::_shenandoah_wb_C = generate_shenandoah_wb(true, false);
+      StubRoutines::_shenandoah_wb_C = generate_shenandoah_wb(true, !ShenandoahWriteBarrierCsetTestInIR);
     }
 
+#ifndef BUILTIN_SIM
     if (UseAESIntrinsics) {
       StubRoutines::_aescrypt_encryptBlock = generate_aescrypt_encryptBlock();
       StubRoutines::_aescrypt_decryptBlock = generate_aescrypt_decryptBlock();
@@ -4324,6 +4364,7 @@ class StubGenerator: public StubCodeGenerator {
     generate_safefetch("SafeFetchN", sizeof(intptr_t), &StubRoutines::_safefetchN_entry,
                                                        &StubRoutines::_safefetchN_fault_pc,
                                                        &StubRoutines::_safefetchN_continuation_pc);
+#endif
   }
 
  public:

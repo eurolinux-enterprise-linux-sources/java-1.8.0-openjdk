@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2018, Red Hat, Inc. All rights reserved.
+ * Copyright (c) 2015, Red Hat, Inc. and/or its affiliates.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
@@ -26,7 +26,7 @@
 
 #include "gc_implementation/shared/markBitMap.inline.hpp"
 #include "memory/threadLocalAllocBuffer.inline.hpp"
-#include "gc_implementation/shenandoah/shenandoahBrooksPointer.inline.hpp"
+#include "gc_implementation/shenandoah/brooksPointer.inline.hpp"
 #include "gc_implementation/shenandoah/shenandoahAsserts.hpp"
 #include "gc_implementation/shenandoah/shenandoahBarrierSet.inline.hpp"
 #include "gc_implementation/shenandoah/shenandoahCollectionSet.hpp"
@@ -36,6 +36,7 @@
 #include "gc_implementation/shenandoah/shenandoahHeap.hpp"
 #include "gc_implementation/shenandoah/shenandoahHeapRegionSet.hpp"
 #include "gc_implementation/shenandoah/shenandoahHeapRegion.inline.hpp"
+#include "gc_implementation/shenandoah/shenandoahUtils.hpp"
 #include "oops/oop.inline.hpp"
 #include "runtime/atomic.hpp"
 #include "runtime/prefetch.hpp"
@@ -43,6 +44,17 @@
 #include "utilities/copy.hpp"
 #include "utilities/globalDefinitions.hpp"
 
+template <class T>
+void ShenandoahUpdateRefsClosure::do_oop_work(T* p) {
+  T o = oopDesc::load_heap_oop(p);
+  if (! oopDesc::is_null(o)) {
+    oop obj = oopDesc::decode_heap_oop_not_null(o);
+    _heap->update_with_forwarded_not_null(p, obj);
+  }
+}
+
+void ShenandoahUpdateRefsClosure::do_oop(oop* p)       { do_oop_work(p); }
+void ShenandoahUpdateRefsClosure::do_oop(narrowOop* p) { do_oop_work(p); }
 
 inline ShenandoahHeapRegion* ShenandoahRegionIterator::next() {
   size_t new_index = Atomic::add((size_t) 1, &_index);
@@ -52,10 +64,6 @@ inline ShenandoahHeapRegion* ShenandoahRegionIterator::next() {
 
 inline bool ShenandoahHeap::has_forwarded_objects() const {
   return _gc_state.is_set(HAS_FORWARDED);
-}
-
-inline ShenandoahWorkGang* ShenandoahHeap::workers() const {
-  return _workers;
 }
 
 inline size_t ShenandoahHeap::heap_region_index_containing(const void* addr) const {
@@ -184,7 +192,7 @@ inline oop ShenandoahHeap::evacuate_object(oop p, Thread* thread, bool& evacuate
   assert(thread->is_evac_allowed(), "must be enclosed in in oom-evac scope");
 
   size_t size_no_fwdptr = (size_t) p->size();
-  size_t size_with_fwdptr = size_no_fwdptr + ShenandoahBrooksPointer::word_size();
+  size_t size_with_fwdptr = size_no_fwdptr + BrooksPointer::word_size();
 
   assert(!heap_region_containing(p)->is_humongous(), "never evacuate humongous objects");
 
@@ -201,7 +209,7 @@ inline oop ShenandoahHeap::evacuate_object(oop p, Thread* thread, bool& evacuate
       filler = allocate_from_gclab(thread, size_with_fwdptr);
     }
     if (filler == NULL) {
-      ShenandoahAllocRequest req = ShenandoahAllocRequest::for_shared_gc(size_with_fwdptr);
+      ShenandoahAllocationRequest req = ShenandoahAllocationRequest::for_shared_gc(size_with_fwdptr);
       filler = allocate_memory(req);
       alloc_from_gclab = false;
     }
@@ -218,14 +226,14 @@ inline oop ShenandoahHeap::evacuate_object(oop p, Thread* thread, bool& evacuate
   }
 
   // Copy the object and initialize its forwarding ptr:
-  HeapWord* copy = filler + ShenandoahBrooksPointer::word_size();
+  HeapWord* copy = filler + BrooksPointer::word_size();
   oop copy_val = oop(copy);
 
   Copy::aligned_disjoint_words((HeapWord*) p, copy, size_no_fwdptr);
-  ShenandoahBrooksPointer::initialize(oop(copy));
+  BrooksPointer::initialize(oop(copy));
 
   // Try to install the new forwarding pointer.
-  oop result = ShenandoahBrooksPointer::try_update_forwardee(p, copy_val);
+  oop result = BrooksPointer::try_update_forwardee(p, copy_val);
 
   if (oopDesc::unsafe_equals(result, p)) {
     // Successfully evacuated. Our copy is now the public one!
@@ -256,7 +264,16 @@ inline oop ShenandoahHeap::evacuate_object(oop p, Thread* thread, bool& evacuate
 }
 
 inline bool ShenandoahHeap::requires_marking(const void* entry) const {
-  return !_marking_context->is_marked(oop(entry));
+  return ! _next_marking_context->is_marked(oop(entry));
+}
+
+bool ShenandoahHeap::region_in_collection_set(size_t region_index) const {
+  assert(collection_set() != NULL, "Sanity");
+  return collection_set()->is_in(region_index);
+}
+
+bool ShenandoahHeap::in_collection_set(ShenandoahHeapRegion* r) const {
+  return region_in_collection_set(r->region_number());
 }
 
 template <class T>
@@ -310,19 +327,22 @@ inline void ShenandoahHeap::marked_object_iterate(ShenandoahHeapRegion* region, 
 }
 
 template<class T>
+inline void ShenandoahHeap::marked_object_safe_iterate(ShenandoahHeapRegion* region, T* cl) {
+  marked_object_iterate(region, cl, region->concurrent_iteration_safe_limit());
+}
+
+template<class T>
 inline void ShenandoahHeap::marked_object_iterate(ShenandoahHeapRegion* region, T* cl, HeapWord* limit) {
-  assert(ShenandoahBrooksPointer::word_offset() < 0, "skip_delta calculation below assumes the forwarding ptr is before obj");
+  assert(BrooksPointer::word_offset() < 0, "skip_delta calculation below assumes the forwarding ptr is before obj");
 
   ShenandoahMarkingContext* const ctx = complete_marking_context();
-  assert(ctx->is_complete(), "sanity");
-
   MarkBitMap* mark_bit_map = ctx->mark_bit_map();
-  HeapWord* tams = ctx->top_at_mark_start(region);
+  HeapWord* tams = ctx->top_at_mark_start(region->region_number());
 
-  size_t skip_bitmap_delta = ShenandoahBrooksPointer::word_size() + 1;
-  size_t skip_objsize_delta = ShenandoahBrooksPointer::word_size() /* + actual obj.size() below */;
-  HeapWord* start = region->bottom() + ShenandoahBrooksPointer::word_size();
-  HeapWord* end = MIN2(tams + ShenandoahBrooksPointer::word_size(), region->end());
+  size_t skip_bitmap_delta = BrooksPointer::word_size() + 1;
+  size_t skip_objsize_delta = BrooksPointer::word_size() /* + actual obj.size() below */;
+  HeapWord* start = region->bottom() + BrooksPointer::word_size();
+  HeapWord* end = MIN2(tams + BrooksPointer::word_size(), region->end());
 
   // Step 1. Scan below the TAMS based on bitmap data.
   HeapWord* limit_bitmap = MIN2(limit, tams);
@@ -352,7 +372,7 @@ inline void ShenandoahHeap::marked_object_iterate(ShenandoahHeapRegion* region, 
     do {
       avail = 0;
       for (int c = 0; (c < dist) && (cb < limit_bitmap); c++) {
-        Prefetch::read(cb, ShenandoahBrooksPointer::byte_offset());
+        Prefetch::read(cb, BrooksPointer::byte_offset());
         slots[avail++] = cb;
         cb += skip_bitmap_delta;
         if (cb < limit_bitmap) {
@@ -364,10 +384,7 @@ inline void ShenandoahHeap::marked_object_iterate(ShenandoahHeapRegion* region, 
         assert (slots[c] < tams,  err_msg("only objects below TAMS here: "  PTR_FORMAT " (" PTR_FORMAT ")", p2i(slots[c]), p2i(tams)));
         assert (slots[c] < limit, err_msg("only objects below limit here: " PTR_FORMAT " (" PTR_FORMAT ")", p2i(slots[c]), p2i(limit)));
         oop obj = oop(slots[c]);
-        assert(!oopDesc::is_null(obj), "sanity");
-        assert(obj->is_oop(), "sanity");
-        assert(_marking_context->is_marked(obj), "object expected to be marked");
-        cl->do_object(obj);
+        do_object_marked_complete(cl, obj);
       }
     } while (avail > 0);
   } else {
@@ -375,10 +392,7 @@ inline void ShenandoahHeap::marked_object_iterate(ShenandoahHeapRegion* region, 
       assert (cb < tams,  err_msg("only objects below TAMS here: "  PTR_FORMAT " (" PTR_FORMAT ")", p2i(cb), p2i(tams)));
       assert (cb < limit, err_msg("only objects below limit here: " PTR_FORMAT " (" PTR_FORMAT ")", p2i(cb), p2i(limit)));
       oop obj = oop(cb);
-      assert(!oopDesc::is_null(obj), "sanity");
-      assert(obj->is_oop(), "sanity");
-      assert(_marking_context->is_marked(obj), "object expected to be marked");
-      cl->do_object(obj);
+      do_object_marked_complete(cl, obj);
       cb += skip_bitmap_delta;
       if (cb < limit_bitmap) {
         cb = mark_bit_map->getNextMarkedWordAddress(cb, limit_bitmap);
@@ -389,18 +403,23 @@ inline void ShenandoahHeap::marked_object_iterate(ShenandoahHeapRegion* region, 
   // Step 2. Accurate size-based traversal, happens past the TAMS.
   // This restarts the scan at TAMS, which makes sure we traverse all objects,
   // regardless of what happened at Step 1.
-  HeapWord* cs = tams + ShenandoahBrooksPointer::word_size();
+  HeapWord* cs = tams + BrooksPointer::word_size();
   while (cs < limit) {
     assert (cs > tams,  err_msg("only objects past TAMS here: "   PTR_FORMAT " (" PTR_FORMAT ")", p2i(cs), p2i(tams)));
     assert (cs < limit, err_msg("only objects below limit here: " PTR_FORMAT " (" PTR_FORMAT ")", p2i(cs), p2i(limit)));
     oop obj = oop(cs);
     int size = obj->size();
-    assert(!oopDesc::is_null(obj), "sanity");
-    assert(obj->is_oop(), "sanity");
-    assert(_marking_context->is_marked(obj), "object expected to be marked");
-    cl->do_object(obj);
+    do_object_marked_complete(cl, obj);
     cs += size + skip_objsize_delta;
   }
+}
+
+template<class T>
+inline void ShenandoahHeap::do_object_marked_complete(T* cl, oop obj) {
+  assert(!oopDesc::is_null(obj), "sanity");
+  assert(obj->is_oop(), "sanity");
+  assert(_complete_marking_context->is_marked(obj), "object expected to be marked");
+  cl->do_object(obj);
 }
 
 template <class T>
@@ -442,29 +461,22 @@ inline void ShenandoahHeap::marked_object_oop_iterate(ShenandoahHeapRegion* regi
   }
 }
 
+template<class T>
+inline void ShenandoahHeap::marked_object_oop_iterate(ShenandoahHeapRegion* region, T* cl) {
+  marked_object_oop_iterate(region, cl, region->top());
+}
+
+template<class T>
+inline void ShenandoahHeap::marked_object_oop_safe_iterate(ShenandoahHeapRegion* region, T* cl) {
+  marked_object_oop_iterate(region, cl, region->concurrent_iteration_safe_limit());
+}
+
 inline ShenandoahHeapRegion* const ShenandoahHeap::get_region(size_t region_idx) const {
-  if (region_idx < _num_regions) {
-    return _regions[region_idx];
-  } else {
+  if (region_idx >= _num_regions) {
     return NULL;
+  } else {
+    return _regions[region_idx];
   }
-}
-
-inline void ShenandoahHeap::mark_complete_marking_context() {
-  _marking_context->mark_complete();
-}
-
-inline void ShenandoahHeap::mark_incomplete_marking_context() {
-  _marking_context->mark_incomplete();
-}
-
-inline ShenandoahMarkingContext* ShenandoahHeap::complete_marking_context() const {
-  assert (_marking_context->is_complete()," sanity");
-  return _marking_context;
-}
-
-inline ShenandoahMarkingContext* ShenandoahHeap::marking_context() const {
-  return _marking_context;
 }
 
 #endif // SHARE_VM_GC_SHENANDOAH_SHENANDOAHHEAP_INLINE_HPP

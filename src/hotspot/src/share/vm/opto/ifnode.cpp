@@ -602,7 +602,7 @@ Node* IfNode::up_one_dom(Node *curr, bool linear_only) {
     if( din4->is_Call() &&      // Handle a slow-path call on either arm
         (din4 = din4->in(0)) )
       din4 = din4->in(0);
-    if (din3 != NULL && din3 == din4 && din3->is_If()) // Regions not degraded to a copy
+    if( din3 == din4 && din3->is_If() )
       return din3;              // Skip around diamonds
   }
 
@@ -1229,6 +1229,22 @@ static IfNode* idealize_test(PhaseGVN* phase, IfNode* iff) {
 
   // Progress
   return iff;
+}
+
+bool IfNode::is_g1_marking_if(PhaseTransform *phase) const {
+  if (Opcode() != Op_If) {
+    return false;
+  }
+
+  Node* bol = in(1);
+  assert(bol->is_Bool(), "");
+  Node* cmpx = bol->in(1);
+  if (bol->as_Bool()->_test._test == BoolTest::ne &&
+      cmpx->is_Cmp() && cmpx->in(2) == phase->intcon(0) &&
+      cmpx->in(1)->is_g1_marking_load()) {
+    return true;
+  }
+  return false;
 }
 
 //------------------------------Identity---------------------------------------

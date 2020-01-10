@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1995, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1995, 2015, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -33,7 +33,6 @@ import java.io.ObjectStreamField;
 import java.io.ObjectInputStream.GetField;
 import java.util.Hashtable;
 import java.util.StringTokenizer;
-import sun.net.util.IPAddressUtil;
 import sun.security.util.SecurityConstants;
 
 /**
@@ -415,29 +414,13 @@ public final class URL implements java.io.Serializable {
         }
         ref = parts.getRef();
 
-        // Note: we don't do full validation of the URL here. Too risky to change
+        // Note: we don't do validation of the URL here. Too risky to change
         // right now, but worth considering for future reference. -br
         if (handler == null &&
             (handler = getURLStreamHandler(protocol)) == null) {
             throw new MalformedURLException("unknown protocol: " + protocol);
         }
         this.handler = handler;
-        if (host != null && isBuiltinStreamHandler(handler)) {
-            String s = IPAddressUtil.checkExternalForm(this);
-            if (s != null) {
-                throw new MalformedURLException(s);
-            }
-        }
-        if ("jar".equalsIgnoreCase(protocol)) {
-            if (handler instanceof sun.net.www.protocol.jar.Handler) {
-                // URL.openConnection() would throw a confusing exception
-                // so generate a better exception here instead.
-                String s = ((sun.net.www.protocol.jar.Handler) handler).checkNestedProtocol(file);
-                if (s != null) {
-                    throw new MalformedURLException(s);
-                }
-            }
-        }
     }
 
     /**
@@ -960,12 +943,7 @@ public final class URL implements java.io.Serializable {
      * @since 1.5
      */
     public URI toURI() throws URISyntaxException {
-        URI uri = new URI(toString());
-        if (authority != null && isBuiltinStreamHandler(handler)) {
-            String s = IPAddressUtil.checkAuthority(this);
-            if (s != null) throw new URISyntaxException(authority, s);
-        }
-        return uri;
+        return new URI (toString());
     }
 
     /**
@@ -1420,10 +1398,6 @@ public final class URL implements java.io.Serializable {
         replacementURL.setSerializedHashCode(tempState.getHashCode());
         resetState();
         return replacementURL;
-    }
-
-    boolean isBuiltinStreamHandler(URLStreamHandler handler) {
-       return isBuiltinStreamHandler(handler.getClass().getName());
     }
 
     private boolean isBuiltinStreamHandler(String handlerClassName) {

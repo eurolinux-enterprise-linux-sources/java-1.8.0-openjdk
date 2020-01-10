@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, Red Hat, Inc. All rights reserved.
+ * Copyright (c) 2018, Red Hat, Inc. and/or its affiliates.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
@@ -77,9 +77,7 @@ class ShenandoahEvacOOMHandler {
 private:
   static const jint OOM_MARKER_MASK;
 
-  char _pad0[DEFAULT_CACHE_LINE_SIZE];
   volatile jint _threads_in_evac;
-  char _pad1[DEFAULT_CACHE_LINE_SIZE];
 
   void wait_for_no_evac_threads();
 

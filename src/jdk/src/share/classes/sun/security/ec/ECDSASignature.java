@@ -32,11 +32,9 @@ import java.math.BigInteger;
 import java.security.*;
 import java.security.interfaces.*;
 import java.security.spec.*;
-import java.util.Optional;
 
 import sun.security.jca.JCAUtil;
 import sun.security.util.*;
-import static sun.security.ec.ECOperations.IntermediateValueException;
 
 /**
  * ECDSA signature implementation. This class currently supports the
@@ -115,7 +113,7 @@ abstract class ECDSASignature extends SignatureSpi {
         // Stores the precomputed message digest value.
         @Override
         protected void engineUpdate(byte[] b, int off, int len)
-        throws SignatureException {
+                throws SignatureException {
             if (offset >= precomputedDigest.length) {
                 offset = RAW_ECDSA_MAX + 1;
                 return;
@@ -140,7 +138,7 @@ abstract class ECDSASignature extends SignatureSpi {
         }
 
         @Override
-        protected void resetDigest() {
+        protected void resetDigest(){
             offset = 0;
         }
 
@@ -169,7 +167,7 @@ abstract class ECDSASignature extends SignatureSpi {
     // Nested class for SHA224withECDSA signatures
     public static final class SHA224 extends ECDSASignature {
         public SHA224() {
-            super("SHA-224");
+           super("SHA-224");
         }
     }
 
@@ -197,7 +195,7 @@ abstract class ECDSASignature extends SignatureSpi {
     // initialize for verification. See JCA doc
     @Override
     protected void engineInitVerify(PublicKey publicKey)
-    throws InvalidKeyException {
+            throws InvalidKeyException {
         this.publicKey = (ECPublicKey) ECKeyFactory.toECKey(publicKey);
 
         // Should check that the supplied key is appropriate for signature
@@ -209,14 +207,14 @@ abstract class ECDSASignature extends SignatureSpi {
     // initialize for signing. See JCA doc
     @Override
     protected void engineInitSign(PrivateKey privateKey)
-    throws InvalidKeyException {
+            throws InvalidKeyException {
         engineInitSign(privateKey, null);
     }
 
     // initialize for signing. See JCA doc
     @Override
     protected void engineInitSign(PrivateKey privateKey, SecureRandom random)
-    throws InvalidKeyException {
+            throws InvalidKeyException {
         this.privateKey = (ECPrivateKey) ECKeyFactory.toECKey(privateKey);
 
         // Should check that the supplied key is appropriate for signature
@@ -256,7 +254,7 @@ abstract class ECDSASignature extends SignatureSpi {
     // update the signature with the plaintext data. See JCA doc
     @Override
     protected void engineUpdate(byte[] b, int off, int len)
-    throws SignatureException {
+            throws SignatureException {
         messageDigest.update(b, off, len);
         needsReset = true;
     }
@@ -273,67 +271,20 @@ abstract class ECDSASignature extends SignatureSpi {
         needsReset = true;
     }
 
-    private byte[] signDigestImpl(ECDSAOperations ops, int seedBits,
-        byte[] digest, ECPrivateKeyImpl privImpl, SecureRandom random)
-        throws SignatureException {
-
-        byte[] seedBytes = new byte[(seedBits + 7) / 8];
-        byte[] s = privImpl.getArrayS();
-
-        // Attempt to create the signature in a loop that uses new random input
-        // each time. The chance of failure is very small assuming the
-        // implementation derives the nonce using extra bits
-        int numAttempts = 128;
-        for (int i = 0; i < numAttempts; i++) {
-            random.nextBytes(seedBytes);
-            ECDSAOperations.Seed seed = new ECDSAOperations.Seed(seedBytes);
-            try {
-                return ops.signDigest(s, digest, seed);
-            } catch (IntermediateValueException ex) {
-                // try again in the next iteration
-            }
-        }
-
-        throw new SignatureException("Unable to produce signature after "
-            + numAttempts + " attempts");
-    }
-
-
-    private Optional<byte[]> signDigestImpl(ECPrivateKey privateKey,
-        byte[] digest, SecureRandom random) throws SignatureException {
-
-        if (! (privateKey instanceof ECPrivateKeyImpl)) {
-            return Optional.empty();
-        }
-        ECPrivateKeyImpl privImpl = (ECPrivateKeyImpl) privateKey;
-        ECParameterSpec params = privateKey.getParams();
-
-        // seed is the key size + 64 bits
-        int seedBits = params.getOrder().bitLength() + 64;
-        Optional<ECDSAOperations> opsOpt =
-            ECDSAOperations.forParameters(params);
-        if (!opsOpt.isPresent()) {
-            return Optional.empty();
-        } else {
-            byte[] sig = signDigestImpl(opsOpt.get(), seedBits, digest,
-                privImpl, random);
-            return Optional.of(sig);
-        }
-    }
-
-    private byte[] signDigestNative(ECPrivateKey privateKey, byte[] digest,
-        SecureRandom random) throws SignatureException {
-
+    // sign the data and return the signature. See JCA doc
+    @Override
+    protected byte[] engineSign() throws SignatureException {
         byte[] s = privateKey.getS().toByteArray();
         ECParameterSpec params = privateKey.getParams();
-
         // DER OID
         byte[] encodedParams = ECUtil.encodeECParameterSpec(null, params);
-        int orderLength = params.getOrder().bitLength();
+        int keySize = params.getCurve().getField().getFieldSize();
 
-        // seed is twice the order length (in bytes) plus 1
-        byte[] seed = new byte[(((orderLength + 7) >> 3) + 1) * 2];
-
+        // seed is twice the key size (in bytes) plus 1
+        byte[] seed = new byte[(((keySize + 7) >> 3) + 1) * 2];
+        if (random == null) {
+            random = JCAUtil.getSecureRandom();
+        }
         random.nextBytes(seed);
 
         // random bits needed for timing countermeasures
@@ -342,31 +293,12 @@ abstract class ECDSASignature extends SignatureSpi {
         timingArgument |= 1;
 
         try {
-            return signDigest(digest, s, encodedParams, seed,
-                timingArgument);
+            return encodeSignature(
+                signDigest(getDigestValue(), s, encodedParams, seed,
+                    timingArgument));
         } catch (GeneralSecurityException e) {
             throw new SignatureException("Could not sign data", e);
         }
-    }
-
-    // sign the data and return the signature. See JCA doc
-    @Override
-    protected byte[] engineSign() throws SignatureException {
-
-        if (random == null) {
-            random = JCAUtil.getSecureRandom();
-        }
-
-        byte[] digest = getDigestValue();
-        Optional<byte[]> sigOpt = signDigestImpl(privateKey, digest, random);
-        byte[] sig;
-        if (sigOpt.isPresent()) {
-            sig = sigOpt.get();
-        } else {
-            sig = signDigestNative(privateKey, digest, random);
-        }
-
-        return encodeSignature(sig);
     }
 
     // verify the data and return the result. See JCA doc
@@ -379,7 +311,7 @@ abstract class ECDSASignature extends SignatureSpi {
         byte[] encodedParams = ECUtil.encodeECParameterSpec(null, params);
 
         if (publicKey instanceof ECPublicKeyImpl) {
-            w = ((ECPublicKeyImpl) publicKey).getEncodedPublicValue();
+            w = ((ECPublicKeyImpl)publicKey).getEncodedPublicValue();
         } else { // instanceof ECPublicKey
             w = ECUtil.encodePoint(publicKey.getW(), params.getCurve());
         }
@@ -398,7 +330,7 @@ abstract class ECDSASignature extends SignatureSpi {
     @Override
     @Deprecated
     protected void engineSetParameter(String param, Object value)
-    throws InvalidParameterException {
+            throws InvalidParameterException {
         throw new UnsupportedOperationException("setParameter() not supported");
     }
 
@@ -406,7 +338,7 @@ abstract class ECDSASignature extends SignatureSpi {
     @Override
     @Deprecated
     protected Object engineGetParameter(String param)
-    throws InvalidParameterException {
+            throws InvalidParameterException {
         throw new UnsupportedOperationException("getParameter() not supported");
     }
 
@@ -426,7 +358,7 @@ abstract class ECDSASignature extends SignatureSpi {
             out.putInteger(r);
             out.putInteger(s);
             DerValue result =
-            new DerValue(DerValue.tag_Sequence, out.toByteArray());
+                new DerValue(DerValue.tag_Sequence, out.toByteArray());
 
             return result.toByteArray();
 
@@ -459,9 +391,9 @@ abstract class ECDSASignature extends SignatureSpi {
             // r and s each occupy half the array
             byte[] result = new byte[k << 1];
             System.arraycopy(rBytes, 0, result, k - rBytes.length,
-            rBytes.length);
+                rBytes.length);
             System.arraycopy(sBytes, 0, result, result.length - sBytes.length,
-            sBytes.length);
+                sBytes.length);
             return result;
 
         } catch (Exception e) {
@@ -501,13 +433,13 @@ abstract class ECDSASignature extends SignatureSpi {
      * @return byte[] the signature.
      */
     private static native byte[] signDigest(byte[] digest, byte[] s,
-                                            byte[] encodedParams, byte[] seed, int timing)
-        throws GeneralSecurityException;
+        byte[] encodedParams, byte[] seed, int timing)
+            throws GeneralSecurityException;
 
     /**
      * Verifies the signed digest using the public key.
      *
-     * @param signature the signature to be verified. It is encoded
+     * @param signedDigest the signature to be verified. It is encoded
      *        as a concatenation of the key's R and S values.
      * @param digest the digest to be used.
      * @param w the public key's W point (in uncompressed form).
@@ -516,6 +448,6 @@ abstract class ECDSASignature extends SignatureSpi {
      * @return boolean true if the signature is successfully verified.
      */
     private static native boolean verifySignedDigest(byte[] signature,
-                                                     byte[] digest, byte[] w, byte[] encodedParams)
-        throws GeneralSecurityException;
+        byte[] digest, byte[] w, byte[] encodedParams)
+            throws GeneralSecurityException;
 }

@@ -744,29 +744,8 @@ int os::active_processor_count() {
 }
 
 void os::set_native_thread_name(const char *name) {
-
-  // See: http://msdn.microsoft.com/en-us/library/xcb2z8hs.aspx
-  //
-  // Note that unfortunately this only works if the process
-  // is already attached to a debugger; debugger must observe
-  // the exception below to show the correct name.
-
-  const DWORD MS_VC_EXCEPTION = 0x406D1388;
-  struct {
-    DWORD dwType;     // must be 0x1000
-    LPCSTR szName;    // pointer to name (in user addr space)
-    DWORD dwThreadID; // thread ID (-1=caller thread)
-    DWORD dwFlags;    // reserved for future use, must be zero
-  } info;
-
-  info.dwType = 0x1000;
-  info.szName = name;
-  info.dwThreadID = -1;
-  info.dwFlags = 0;
-
-  __try {
-    RaiseException (MS_VC_EXCEPTION, 0, sizeof(info)/sizeof(DWORD), (const ULONG_PTR*)&info );
-  } __except(EXCEPTION_CONTINUE_EXECUTION) {}
+  // Not yet implemented.
+  return;
 }
 
 bool os::distribute_processes(uint length, uint* distribution) {
@@ -1172,12 +1151,14 @@ os::opendir(const char *dirname)
     return dirp;
 }
 
+/* parameter dbuf unused on Windows */
+
 struct dirent *
-os::readdir(DIR *dirp)
+os::readdir(DIR *dirp, dirent *dbuf)
 {
     assert(dirp != NULL, "just checking");      // hotspot change
     if (dirp->handle == INVALID_HANDLE_VALUE) {
-        return NULL;
+        return 0;
     }
 
     strcpy(dirp->dirent.d_name, dirp->find_data.cFileName);
@@ -1185,7 +1166,7 @@ os::readdir(DIR *dirp)
     if (!FindNextFile(dirp->handle, &dirp->find_data)) {
         if (GetLastError() == ERROR_INVALID_HANDLE) {
             errno = EBADF;
-            return NULL;
+            return 0;
         }
         FindClose(dirp->handle);
         dirp->handle = INVALID_HANDLE_VALUE;

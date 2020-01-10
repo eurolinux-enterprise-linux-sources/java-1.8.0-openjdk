@@ -3,7 +3,7 @@
  * DO NOT REMOVE OR ALTER!
  */
 /*
- * Copyright 1999-2019 The Apache Software Foundation.
+ * Copyright 1999-2004 The Apache Software Foundation.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1007,10 +1007,10 @@ public class WalkerFactory
       case OpCodes.OP_EXTFUNCTION :
       case OpCodes.OP_FUNCTION :
       case OpCodes.OP_GROUP :
-        expr = compiler.compileExpression(opPos);
+        expr = compiler.compile(opPos);
         break;
       default :
-        expr = compiler.compileExpression(opPos + 2);
+        expr = compiler.compile(opPos + 2);
       }
 
       axis = Axis.FILTEREDLIST;

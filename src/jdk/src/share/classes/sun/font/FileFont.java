@@ -171,7 +171,7 @@ public abstract class FileFont extends PhysicalFont {
             }
         }
         if (scaler != null) {
-            scaler.disposeScaler();
+            scaler.dispose();
         }
         scaler = FontScaler.getNullScaler();
     }

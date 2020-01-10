@@ -33,7 +33,6 @@
 #include "opto/node.hpp"
 #include "opto/opcodes.hpp"
 #include "opto/regmask.hpp"
-#include "opto/shenandoahSupport.hpp"
 #include "opto/type.hpp"
 #include "utilities/copy.hpp"
 

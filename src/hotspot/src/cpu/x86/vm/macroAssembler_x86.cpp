@@ -1157,7 +1157,7 @@ int MacroAssembler::biased_locking_enter(Register lock_reg,
   // the prototype header is no longer biased and we have to revoke
   // the bias on this object.
   testptr(header_reg, markOopDesc::biased_lock_mask_in_place);
-  jccb(Assembler::notZero, try_revoke_bias);
+  jccb_if_possible(Assembler::notZero, try_revoke_bias);
 
   // Biasing is still enabled for this data type. See whether the
   // epoch of the current bias is still valid, meaning that the epoch
@@ -1169,7 +1169,7 @@ int MacroAssembler::biased_locking_enter(Register lock_reg,
   // otherwise the manipulations it performs on the mark word are
   // illegal.
   testptr(header_reg, markOopDesc::epoch_mask_in_place);
-  jccb(Assembler::notZero, try_rebias);
+  jccb_if_possible(Assembler::notZero, try_rebias);
 
   // The epoch of the current bias is still valid but we know nothing
   // about the owner; it might be set or it might be clear. Try to
@@ -1782,7 +1782,7 @@ void MacroAssembler::fast_lock(Register objReg, Register boxReg, Register tmpReg
 
     movptr(tmpReg, Address(objReg, 0));          // [FETCH]
     testptr(tmpReg, markOopDesc::monitor_value); // inflated vs stack-locked|neutral|biased
-    jccb(Assembler::notZero, IsInflated);
+    jccb_if_possible(Assembler::notZero, IsInflated);
 
     // Attempt stack-locking ...
     orptr (tmpReg, markOopDesc::unlocked_value);
@@ -1873,7 +1873,7 @@ void MacroAssembler::fast_lock(Register objReg, Register boxReg, Register tmpReg
          // Test-And-CAS instead of CAS
          movptr(tmpReg, Address (tmpReg, ObjectMonitor::owner_offset_in_bytes()-2));   // rax, = m->_owner
          testptr(tmpReg, tmpReg);                   // Locked ?
-         jccb  (Assembler::notZero, DONE_LABEL);
+         jccb_if_possible(Assembler::notZero, DONE_LABEL);
        }
 
        // Appears unlocked - try to swing _owner from null to non-null.
@@ -1889,7 +1889,7 @@ void MacroAssembler::fast_lock(Register objReg, Register boxReg, Register tmpReg
        }
        cmpxchgptr(scrReg, Address(boxReg, ObjectMonitor::owner_offset_in_bytes()-2));
        movptr(Address(scrReg, 0), 3);          // box->_displaced_header = 3
-       jccb  (Assembler::notZero, DONE_LABEL);
+       jccb_if_possible(Assembler::notZero, DONE_LABEL);
        get_thread (scrReg);                    // beware: clobbers ICCs
        movptr(Address(boxReg, ObjectMonitor::owner_offset_in_bytes()-2), scrReg);
        xorptr(boxReg, boxReg);                 // set icc.ZFlag = 1 to indicate success
@@ -1918,7 +1918,7 @@ void MacroAssembler::fast_lock(Register objReg, Register boxReg, Register tmpReg
          // Can suffer RTS->RTO upgrades on shared or cold $ lines
          movptr(tmpReg, Address (tmpReg, ObjectMonitor::owner_offset_in_bytes()-2));   // rax, = m->_owner
          testptr(tmpReg, tmpReg);                   // Locked ?
-         jccb  (Assembler::notZero, DONE_LABEL);
+         jccb_if_possible(Assembler::notZero, DONE_LABEL);
        }
 
        // Appears unlocked - try to swing _owner from null to non-null.
@@ -1953,7 +1953,7 @@ void MacroAssembler::fast_lock(Register objReg, Register boxReg, Register tmpReg
     movptr (boxReg, tmpReg);
     movptr (tmpReg, Address(boxReg, ObjectMonitor::owner_offset_in_bytes()-2));
     testptr(tmpReg, tmpReg);
-    jccb   (Assembler::notZero, DONE_LABEL);
+    jccb_if_possible(Assembler::notZero, DONE_LABEL);
 
     // It's inflated and appears unlocked
     if (os::is_MP()) {
@@ -2071,7 +2071,7 @@ void MacroAssembler::fast_unlock(Register objReg, Register boxReg, Register tmpR
       testptr(boxReg, boxReg);
       jccb(Assembler::notZero, L_regular_inflated_unlock);
       xend();
-      jmpb(DONE_LABEL);
+      jmpb_if_possible(DONE_LABEL);
       bind(L_regular_inflated_unlock);
     }
 #endif
@@ -2115,18 +2115,18 @@ void MacroAssembler::fast_unlock(Register objReg, Register boxReg, Register tmpR
        orptr(boxReg, Address (tmpReg, ObjectMonitor::recursions_offset_in_bytes()-2));
        orptr(boxReg, Address (tmpReg, ObjectMonitor::EntryList_offset_in_bytes()-2));
        orptr(boxReg, Address (tmpReg, ObjectMonitor::cxq_offset_in_bytes()-2));
-       jccb  (Assembler::notZero, DONE_LABEL);
+       jccb_if_possible(Assembler::notZero, DONE_LABEL);
        movptr(Address (tmpReg, ObjectMonitor::owner_offset_in_bytes()-2), NULL_WORD);
-       jmpb  (DONE_LABEL);
+       jmpb_if_possible(DONE_LABEL);
     } else {
        xorptr(boxReg, Address (tmpReg, ObjectMonitor::owner_offset_in_bytes()-2));
        orptr(boxReg, Address (tmpReg, ObjectMonitor::recursions_offset_in_bytes()-2));
-       jccb  (Assembler::notZero, DONE_LABEL);
+       jccb_if_possible(Assembler::notZero, DONE_LABEL);
        movptr(boxReg, Address (tmpReg, ObjectMonitor::EntryList_offset_in_bytes()-2));
        orptr(boxReg, Address (tmpReg, ObjectMonitor::cxq_offset_in_bytes()-2));
-       jccb  (Assembler::notZero, CheckSucc);
+       jccb_if_possible(Assembler::notZero, CheckSucc);
        movptr(Address (tmpReg, ObjectMonitor::owner_offset_in_bytes()-2), NULL_WORD);
-       jmpb  (DONE_LABEL);
+       jmpb_if_possible(DONE_LABEL);
     }
 
     // The Following code fragment (EmitSync & 65536) improves the performance of
@@ -2198,11 +2198,11 @@ void MacroAssembler::fast_unlock(Register objReg, Register boxReg, Register tmpR
 
        bind  (LGoSlowPath);
        orptr(boxReg, 1);                      // set ICC.ZF=0 to indicate failure
-       jmpb  (DONE_LABEL);
+       jmpb_if_possible(DONE_LABEL);
 
        bind  (LSuccess);
        xorptr(boxReg, boxReg);                 // set ICC.ZF=1 to indicate success
-       jmpb  (DONE_LABEL);
+       jmpb_if_possible(DONE_LABEL);
     }
 
     bind (Stacked);
@@ -2231,12 +2231,12 @@ void MacroAssembler::fast_unlock(Register objReg, Register boxReg, Register tmpR
     movptr(boxReg, Address (tmpReg, ObjectMonitor::owner_offset_in_bytes()-2));
     xorptr(boxReg, r15_thread);
     orptr (boxReg, Address (tmpReg, ObjectMonitor::recursions_offset_in_bytes()-2));
-    jccb  (Assembler::notZero, DONE_LABEL);
+    jccb_if_possible(Assembler::notZero, DONE_LABEL);
     movptr(boxReg, Address (tmpReg, ObjectMonitor::cxq_offset_in_bytes()-2));
     orptr (boxReg, Address (tmpReg, ObjectMonitor::EntryList_offset_in_bytes()-2));
     jccb  (Assembler::notZero, CheckSucc);
     movptr(Address (tmpReg, ObjectMonitor::owner_offset_in_bytes()-2), (int32_t)NULL_WORD);
-    jmpb  (DONE_LABEL);
+    jmpb_if_possible(DONE_LABEL);
 
     if ((EmitSync & 65536) == 0) {
       Label LSuccess, LGoSlowPath ;
@@ -2263,11 +2263,11 @@ void MacroAssembler::fast_unlock(Register objReg, Register boxReg, Register tmpR
 
       bind  (LGoSlowPath);
       orl   (boxReg, 1);                      // set ICC.ZF=0 to indicate failure
-      jmpb  (DONE_LABEL);
+      jmpb_if_possible(DONE_LABEL);
 
       bind  (LSuccess);
       testl (boxReg, 0);                      // set ICC.ZF=1 to indicate success
-      jmpb  (DONE_LABEL);
+      jmpb_if_possible(DONE_LABEL);
     }
 
     bind  (Stacked);
@@ -4218,42 +4218,6 @@ void MacroAssembler::vxorps(XMMRegister dst, XMMRegister nds, AddressLiteral src
   }
 }
 
-void MacroAssembler::resolve_jobject(Register value,
-                                     Register thread,
-                                     Register tmp) {
-  assert_different_registers(value, thread, tmp);
-  Label done, not_weak;
-  testptr(value, value);
-  jcc(Assembler::zero, done);                // Use NULL as-is.
-  testptr(value, JNIHandles::weak_tag_mask); // Test for jweak tag.
-  jcc(Assembler::zero, not_weak);
-  // Resolve jweak.
-  movptr(value, Address(value, -JNIHandles::weak_tag_value));
-  verify_oop(value);
-#if INCLUDE_ALL_GCS
-  if (UseG1GC || (UseShenandoahGC && ShenandoahSATBBarrier)) {
-    g1_write_barrier_pre(noreg /* obj */,
-                         value /* pre_val */,
-                         thread /* thread */,
-                         tmp /* tmp */,
-                         true /* tosca_live */,
-                         true /* expand_call */);
-  }
-#endif // INCLUDE_ALL_GCS
-  jmp(done);
-  bind(not_weak);
-  // Resolve (untagged) jobject.
-  movptr(value, Address(value, 0));
-  verify_oop(value);
-  bind(done);
-}
-
-void MacroAssembler::clear_jweak_tag(Register possibly_jweak) {
-  const int32_t inverted_jweak_mask = ~static_cast<int32_t>(JNIHandles::weak_tag_mask);
-  STATIC_ASSERT(inverted_jweak_mask == -2); // otherwise check this code
-  // The inverted mask is sign-extended
-  andptr(possibly_jweak, inverted_jweak_mask);
-}
 
 //////////////////////////////////////////////////////////////////////////////////
 #if INCLUDE_ALL_GCS
@@ -4491,7 +4455,9 @@ void MacroAssembler::shenandoah_write_barrier(Register dst) {
   jccb(Assembler::zero, done);
 
   // Heap is unstable, need to perform the read-barrier even if WB is inactive
-  movptr(dst, Address(dst, ShenandoahBrooksPointer::byte_offset()));
+  if (ShenandoahWriteBarrierRB) {
+    movptr(dst, Address(dst, BrooksPointer::byte_offset()));
+  }
 
   // Check for evacuation-in-progress and jump to WB slow-path if needed
   testb(gc_state, ShenandoahHeap::EVACUATION);

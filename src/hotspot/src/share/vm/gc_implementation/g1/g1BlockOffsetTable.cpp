@@ -447,6 +447,8 @@ G1BlockOffsetArrayContigSpace(G1BlockOffsetSharedArray* array,
 }
 
 HeapWord* G1BlockOffsetArrayContigSpace::initialize_threshold_raw() {
+  assert(!Universe::heap()->is_in_reserved(_array->_offset_array),
+         "just checking");
   _next_offset_index = _array->index_for_raw(_bottom);
   _next_offset_index++;
   _next_offset_threshold =
@@ -455,6 +457,8 @@ HeapWord* G1BlockOffsetArrayContigSpace::initialize_threshold_raw() {
 }
 
 void G1BlockOffsetArrayContigSpace::zero_bottom_entry_raw() {
+  assert(!Universe::heap()->is_in_reserved(_array->_offset_array),
+         "just checking");
   size_t bottom_index = _array->index_for_raw(_bottom);
   assert(_array->address_for_index_raw(bottom_index) == _bottom,
          "Precondition of call");
@@ -462,6 +466,8 @@ void G1BlockOffsetArrayContigSpace::zero_bottom_entry_raw() {
 }
 
 HeapWord* G1BlockOffsetArrayContigSpace::initialize_threshold() {
+  assert(!Universe::heap()->is_in_reserved(_array->_offset_array),
+         "just checking");
   _next_offset_index = _array->index_for(_bottom);
   _next_offset_index++;
   _next_offset_threshold =

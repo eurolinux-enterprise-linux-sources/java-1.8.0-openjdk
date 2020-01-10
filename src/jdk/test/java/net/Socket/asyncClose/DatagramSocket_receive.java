@@ -26,25 +26,20 @@
  * throws a SocketException if the socket is asynchronously closed.
  */
 import java.net.*;
-import java.util.concurrent.CountDownLatch;
 
 public class DatagramSocket_receive extends AsyncCloseTest implements Runnable {
-    private final DatagramSocket s;
-    private final int timeout;
-    private final CountDownLatch latch;
+    DatagramSocket s;
+    int timeout = 0;
 
-    public DatagramSocket_receive() throws SocketException {
-        this(0);
+    public DatagramSocket_receive() {
     }
 
-    public DatagramSocket_receive(int timeout) throws SocketException {
+    public DatagramSocket_receive(int timeout) {
         this.timeout = timeout;
-        latch = new CountDownLatch(1);
-        s = new DatagramSocket();
     }
 
     public String description() {
-        String s = "DatagramSocket.receive(DatagramPacket)";
+        String s = "DatagramSocket.receive";
         if (timeout > 0) {
             s += " (timeout specified)";
         }
@@ -52,45 +47,46 @@ public class DatagramSocket_receive extends AsyncCloseTest implements Runnable {
     }
 
     public void run() {
+        DatagramPacket p;
         try {
+
             byte b[] = new byte[1024];
-            DatagramPacket p  = new DatagramPacket(b, b.length);
+            p  = new DatagramPacket(b, b.length);
+
             if (timeout > 0) {
                 s.setSoTimeout(timeout);
             }
-            latch.countDown();
-            s.receive(p);
-            failed("DatagramSocket.receive(DatagramPacket) returned unexpectly!!");
-        } catch (SocketException se) {
-            if (latch.getCount() != 1) {
-                closed();
-            }
         } catch (Exception e) {
             failed(e.getMessage());
-        } finally {
-            if (latch.getCount() == 1) {
-                latch.countDown();
-            }
+            return;
+        }
+
+        try {
+            s.receive(p);
+        } catch (SocketException se) {
+            closed();
+        } catch (Exception e) {
+            failed(e.getMessage());
         }
     }
 
-    public AsyncCloseTest go() {
-        try {
-            Thread thr = new Thread(this);
-            thr.start();
-            latch.await();
-            Thread.sleep(5000); //sleep, so receive(DatagramPacket) can block
-            s.close();
-            thr.join();
+    public boolean go() throws Exception {
+        s = new DatagramSocket();
 
-            if (isClosed()) {
-                return passed();
-            } else {
-                return failed("DatagramSocket.receive(DatagramPacket) wasn't preempted");
-            }
-        } catch (Exception x) {
-            failed(x.getMessage());
-            throw new RuntimeException(x);
+        Thread thr = new Thread(this);
+        thr.start();
+
+        Thread.currentThread().sleep(1000);
+
+        s.close();
+
+        Thread.currentThread().sleep(1000);
+
+        if (isClosed()) {
+            return true;
+        } else {
+            failed("DatagramSocket.receive wasn't preempted");
+            return false;
         }
     }
 }

@@ -124,6 +124,7 @@ compact3 = \
  -:needs_jre \
  -:needs_jdk
 
+
 # When called from top level the test suites use the hotspot_ prefix
 hotspot_wbapitest = \
   sanity/
@@ -143,25 +144,23 @@ hotspot_tier1_gc_shenandoah = \
   gc/shenandoah/oom/
 
 hotspot_tier2_gc_shenandoah = \
+  :hotspot_tier1_gc_shenandoah \
   gc/arguments/TestUseCompressedOopsErgo.java \
   gc/arguments/TestAlignmentToUseLargePages.java \
   gc/logging/TestGCId.java \
   gc/metaspace/TestMetaspacePerfCounters.java \
   gc/startup_warnings/TestShenandoah.java \
   gc/shenandoah/
-  -gc/shenandoah/TestStringDedupStress.java \
-  -gc/shenandoah/jni/TestCriticalNativeStress.sh \
-  -:hotspot_tier1_gc_shenandoah
+  -gc/shenandoah/ShenandoahStrDedupStress.java \
+  -gc/shenandoah/CriticalNativeStress.java
+
+hotspot_shenandoah_stress = \
+  gc/shenandoah/ShenandoahStrDedupStress.java \
+  gc/shenandoah/CriticalNativeStress.java
 
 hotspot_tier3_gc_shenandoah = \
-  gc/shenandoah/TestStringDedupStress.java \
-  gc/shenandoah/jni/TestCriticalNativeStress.sh \
-  -:hotspot_tier2_gc_shenandoah
-
-hotspot_gc_shenandoah = \
-  :hotspot_tier1_gc_shenandoah \
   :hotspot_tier2_gc_shenandoah \
-  :hotspot_tier3_gc_shenandoah
+  :hotspot_shenandoah_stress
 
 hotspot_runtime = \
   sanity/ExecuteInternalVMTests.java
@@ -174,11 +173,6 @@ hotspot_all = \
   :hotspot_gc \
   :hotspot_runtime \
   :hotspot_serviceability
-
-# Right now tier1 runs all hotspot tests
-hotspot_tier1 = \
-  :jdk
-
 # Tests that require compact3 API's
 #
 needs_compact3 = \

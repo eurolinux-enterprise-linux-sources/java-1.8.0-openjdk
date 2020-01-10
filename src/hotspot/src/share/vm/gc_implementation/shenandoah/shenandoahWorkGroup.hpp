@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2018, Red Hat, Inc. All rights reserved.
+ * Copyright (c) 2017, Red Hat, Inc. and/or its affiliates.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
@@ -23,8 +23,7 @@
 
 #ifndef SHARE_VM_GC_SHENANDOAH_SHENANDOAH_WORKGROUP_HPP
 #define SHARE_VM_GC_SHENANDOAH_SHENANDOAH_WORKGROUP_HPP
-
-#include "gc_implementation/shenandoah/shenandoahTaskqueue.hpp"
+ 
 #include "utilities/workgroup.hpp"
 #include "memory/allocation.hpp"
 
@@ -35,9 +34,10 @@ private:
   uint      _n_workers;
   ShenandoahWorkGang* _workers;
 public:
-  ShenandoahWorkerScope(ShenandoahWorkGang* workers, uint nworkers, const char* msg, bool do_check = true);
+  ShenandoahWorkerScope(ShenandoahWorkGang* workers, uint nworkers, const char* msg);
   ~ShenandoahWorkerScope();
 };
+
 
 class ShenandoahPushWorkerScope : StackObj {
 private:
@@ -49,6 +49,7 @@ public:
   ShenandoahPushWorkerScope(ShenandoahWorkGang* workers, uint nworkers, bool do_check = true);
   ~ShenandoahPushWorkerScope();
 };
+
 
 class ShenandoahWorkGang : public FlexibleWorkGang {
 public:

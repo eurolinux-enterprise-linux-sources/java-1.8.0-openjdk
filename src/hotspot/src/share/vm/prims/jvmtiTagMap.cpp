@@ -166,11 +166,6 @@ class JvmtiTagHashmap : public CHeapObj<mtInternal> {
   static unsigned int hash(oop key, int size) {
     // shift right to get better distribution (as these bits will be zero
     // with aligned addresses)
-#if INCLUDE_ALL_GCS
-    if (UseShenandoahGC) {
-      key = oopDesc::bs()->write_barrier(key);
-    }
-#endif
     unsigned int addr = (unsigned int)(cast_from_oop<intptr_t>(key));
 #ifdef _LP64
     return (addr >> 3) % size;
@@ -307,7 +302,7 @@ class JvmtiTagHashmap : public CHeapObj<mtInternal> {
     unsigned int h = hash(key);
     JvmtiTagHashmapEntry* entry = _table[h];
     while (entry != NULL) {
-      if (oopDesc::equals(entry->object(), key)) {
+      if (entry->object() == key) {
          return entry;
       }
       entry = entry->next();
@@ -349,7 +344,7 @@ class JvmtiTagHashmap : public CHeapObj<mtInternal> {
     JvmtiTagHashmapEntry* entry = _table[h];
     JvmtiTagHashmapEntry* prev = NULL;
     while (entry != NULL) {
-      if (oopDesc::equals(key, entry->object())) {
+      if (key == entry->object()) {
         break;
       }
       prev = entry;
@@ -435,7 +430,7 @@ JvmtiTagMap::JvmtiTagMap(JvmtiEnv* env) :
   _hashmap = new JvmtiTagHashmap();
 
   // finally add us to the environment
-  ((JvmtiEnvBase *)env)->release_set_tag_map(this);
+  ((JvmtiEnvBase *)env)->set_tag_map(this);
 }
 
 
@@ -504,7 +499,7 @@ void JvmtiTagMap::destroy_entry(JvmtiTagHashmapEntry* entry) {
 // returns the tag map for the given environments. If the tag map
 // doesn't exist then it is created.
 JvmtiTagMap* JvmtiTagMap::tag_map_for(JvmtiEnv* env) {
-  JvmtiTagMap* tag_map = ((JvmtiEnvBase*)env)->tag_map_acquire();
+  JvmtiTagMap* tag_map = ((JvmtiEnvBase*)env)->tag_map();
   if (tag_map == NULL) {
     MutexLocker mu(JvmtiThreadState_lock);
     tag_map = ((JvmtiEnvBase*)env)->tag_map();
@@ -3287,7 +3282,7 @@ void JvmtiTagMap::weak_oops_do(BoolObjectClosure* is_alive, OopClosure* f) {
   if (JvmtiEnv::environments_might_exist()) {
     JvmtiEnvIterator it;
     for (JvmtiEnvBase* env = it.first(); env != NULL; env = it.next(env)) {
-      JvmtiTagMap* tag_map = env->tag_map_acquire();
+      JvmtiTagMap* tag_map = env->tag_map();
       if (tag_map != NULL && !tag_map->is_empty()) {
         tag_map->do_weak_oops(is_alive, f);
       }

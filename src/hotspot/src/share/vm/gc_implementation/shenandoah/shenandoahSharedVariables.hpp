@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2018, Red Hat, Inc. All rights reserved.
+ * Copyright (c) 2017, Red Hat, Inc. and/or its affiliates.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
@@ -25,14 +25,13 @@
 #define SHARE_VM_GC_SHENANDOAH_SHENANDOAHSHAREDFLAG_HPP
 
 #include "memory/allocation.hpp"
-#include "runtime/orderAccess.hpp"
 
 typedef jbyte ShenandoahSharedValue;
 
 typedef struct ShenandoahSharedFlag {
   enum {
     UNSET = 0,
-    SET = 1
+    SET = 1,
   };
 
   char _pad_0[128];
@@ -62,8 +61,8 @@ typedef struct ShenandoahSharedFlag {
     return OrderAccess::load_acquire((volatile ShenandoahSharedValue*) &value) == UNSET;
   }
 
-  void set_cond(bool val) {
-    if (val) {
+  void set_cond(bool value) {
+    if (value) {
       set();
     } else {
       unset();
@@ -167,8 +166,8 @@ typedef struct ShenandoahSharedBitmap {
     return (OrderAccess::load_acquire((volatile ShenandoahSharedValue*)&value)) == 0;
   }
 
-  void set_cond(uint mask, bool val) {
-    if (val) {
+  void set_cond(uint mask, bool value) {
+    if (value) {
       set(mask);
     } else {
       unset(mask);
@@ -197,6 +196,7 @@ private:
   bool operator<=(ShenandoahSharedFlag& other) { fatal("Use is_set() instead"); return false; }
 
 } ShenandoahSharedBitmap;
+
 
 template<class T>
 struct ShenandoahSharedEnumFlag {
@@ -242,5 +242,6 @@ private:
   bool operator<=(ShenandoahSharedEnumFlag& other) { fatal("Use get() instead"); return false; }
 
 };
+
 
 #endif // SHARE_VM_GC_SHENANDOAH_SHENANDOAHSHAREDFLAG_HPP

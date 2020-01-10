@@ -24,6 +24,8 @@
 /* @test
  * @bug 4607272
  * @summary Unit test for AsynchronousChannelGroup
+ * @build Basic
+ * @run main/othervm -XX:-UseVMInterruptibleIO Basic
  */
 
 import java.nio.ByteBuffer;
@@ -35,21 +37,18 @@ import java.io.IOException;
 
 public class Basic {
     static final Random rand = new Random();
-    static final ThreadFactory threadFactory = (Runnable r) -> {
-        return new Thread(r);
-    };
+    static final ThreadFactory threadFactory = new ThreadFactory() {
+        @Override
+        public Thread newThread(final Runnable r) {
+            return new Thread(r);
+        }};
+
 
     public static void main(String[] args) throws Exception {
         shutdownTests();
         shutdownNowTests();
         afterShutdownTests();
         miscTests();
-    }
-
-    static void awaitTermination(AsynchronousChannelGroup group) throws InterruptedException {
-        boolean terminated = group.awaitTermination(20, TimeUnit.SECONDS);
-        if (!terminated)
-            throw new RuntimeException("Group should have terminated");
     }
 
     static void testShutdownWithNoChannels(ExecutorService pool,
@@ -60,7 +59,9 @@ public class Basic {
         if (!group.isShutdown())
             throw new RuntimeException("Group should be shutdown");
         // group should terminate quickly
-        awaitTermination(group);
+        boolean terminated = group.awaitTermination(3, TimeUnit.SECONDS);
+        if (!terminated)
+            throw new RuntimeException("Group should have terminated");
         if (pool != null && !pool.isTerminated())
             throw new RuntimeException("Executor should have terminated");
     }
@@ -85,7 +86,9 @@ public class Basic {
         ch.close();
 
         // group should terminate quickly
-        awaitTermination(group);
+        boolean terminated = group.awaitTermination(3, TimeUnit.SECONDS);
+        if (!terminated)
+            throw new RuntimeException("Group should have terminated");
         if (pool != null && !pool.isTerminated())
             throw new RuntimeException("Executor should have terminated");
     }
@@ -150,8 +153,9 @@ public class Basic {
         if (ch.isOpen())
             throw new RuntimeException("Channel should be closed");
 
-        awaitTermination(group);
-
+        boolean terminated = group.awaitTermination(3, TimeUnit.SECONDS);
+        if (!terminated)
+            throw new RuntimeException("Group should have terminated");
         if (pool != null && !pool.isTerminated())
             throw new RuntimeException("Executor should have terminated");
     }
@@ -256,7 +260,9 @@ public class Basic {
         // close channel; group should terminate quickly
         ch.close();
         listener.close();
-        awaitTermination(group);
+        terminated = group.awaitTermination(3, TimeUnit.SECONDS);
+        if (!terminated)
+            throw new RuntimeException("Group should have terminated");
     }
 
     static void miscTests() throws Exception {

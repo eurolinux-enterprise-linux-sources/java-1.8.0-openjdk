@@ -29,7 +29,6 @@
 #include "memory/allocation.inline.hpp"
 #include "runtime/mutex.hpp"
 #include "runtime/orderAccess.inline.hpp"
-#include "utilities/globalDefinitions.hpp"
 #include "utilities/stack.hpp"
 
 // Simple TaskQueue stats that are collected by default in debug builds.
@@ -610,6 +609,7 @@ size_t GenericTaskQueueSet<T, F>::tasks() {
 class TerminatorTerminator: public CHeapObj<mtInternal> {
 public:
   virtual bool should_exit_termination() = 0;
+  virtual bool should_force_termination() { return false; }
 };
 
 // A class to aid in the termination of a set of parallel tasks using
@@ -621,9 +621,7 @@ class ParallelTaskTerminator: public StackObj {
 protected:
   int _n_threads;
   TaskQueueSetSuper* _queue_set;
-  char _pad_before[DEFAULT_CACHE_LINE_SIZE];
   int _offered_termination;
-  char _pad_after[DEFAULT_CACHE_LINE_SIZE];
 
 #ifdef TRACESPINNING
   static uint _total_yields;
@@ -646,6 +644,7 @@ public:
   // else is.  If returns "true", all threads are terminated.  If returns
   // "false", available work has been observed in one of the task queues,
   // so the global task is not complete.
+  // If force is set to true, it terminates even if there's remaining work left
   virtual bool offer_termination() {
     return offer_termination(NULL);
   }
@@ -653,6 +652,7 @@ public:
   // As above, but it also terminates if the should_exit_termination()
   // method of the terminator parameter returns true. If terminator is
   // NULL, then it is ignored.
+  // If force is set to true, it terminates even if there's remaining work left
   bool offer_termination(TerminatorTerminator* terminator);
 
   // Reset the terminator, so that it may be reused again.

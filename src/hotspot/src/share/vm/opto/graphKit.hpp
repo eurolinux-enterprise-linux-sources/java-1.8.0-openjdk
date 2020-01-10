@@ -700,7 +700,7 @@ class GraphKit : public Phase {
   void  set_predefined_output_for_runtime_call(Node* call,
                                                Node* keep_mem,
                                                const TypePtr* hook_mem);
-  Node* set_predefined_input_for_runtime_call(SafePointNode* call, Node* narrow_mem = NULL);
+  Node* set_predefined_input_for_runtime_call(SafePointNode* call);
 
   // Replace the call with the current state of the kit.  Requires
   // that the call was generated with separate io_projs so that
@@ -918,6 +918,7 @@ class GraphKit : public Phase {
 
   Node* shenandoah_read_barrier(Node* obj);
   Node* shenandoah_read_barrier_storeval(Node* obj);
+  Node* shenandoah_read_barrier_acmp(Node* obj);
   Node* shenandoah_write_barrier(Node* obj);
 private:
   Node* shenandoah_read_barrier_impl(Node* obj, bool use_ctrl, bool use_mem, bool allow_fromspace);

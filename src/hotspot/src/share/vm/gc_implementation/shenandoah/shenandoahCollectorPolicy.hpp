@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2018, Red Hat, Inc. All rights reserved.
+ * Copyright (c) 2013, 2015, Red Hat, Inc. and/or its affiliates.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
@@ -24,13 +24,20 @@
 #ifndef SHARE_VM_GC_SHENANDOAH_SHENANDOAHCOLLECTORPOLICY_HPP
 #define SHARE_VM_GC_SHENANDOAH_SHENANDOAHCOLLECTORPOLICY_HPP
 
-#include "memory/collectorPolicy.hpp"
+#include "gc_implementation/shenandoah/shenandoahPhaseTimings.hpp"
 #include "gc_implementation/shenandoah/shenandoahHeap.hpp"
-#include "gc_implementation/shenandoah/shenandoahTracer.hpp"
-#include "utilities/ostream.hpp"
+#include "memory/collectorPolicy.hpp"
+#include "runtime/arguments.hpp"
+#include "utilities/numberSeq.hpp"
+
+class ShenandoahCollectionSet;
+class ShenandoahFreeSet;
+class ShenandoahHeap;
+class ShenandoahHeuristics;
 
 class STWGCTimer;
 class ConcurrentGCTimer;
+class outputStream;
 
 class ShenandoahCollectorPolicy: public CollectorPolicy {
 private:
@@ -42,8 +49,6 @@ private:
   size_t _alloc_failure_full;
   size_t _explicit_concurrent;
   size_t _explicit_full;
-  size_t _implicit_concurrent;
-  size_t _implicit_full;
   size_t _degen_points[ShenandoahHeap::_DEGENERATED_LIMIT];
 
   ShenandoahSharedFlag _in_shutdown;
@@ -51,6 +56,7 @@ private:
   ShenandoahTracer* _tracer;
 
   size_t _cycle_counter;
+
 
 public:
   ShenandoahCollectorPolicy();
@@ -64,10 +70,6 @@ public:
                               bool* gc_overhead_limit_was_exceeded);
 
   HeapWord* satisfy_failed_allocation(size_t size, bool is_tlab);
-
-  MetaWord* satisfy_failed_metadata_allocation(ClassLoaderData* loader_data,
-                                               size_t size,
-                                               Metaspace::MetadataType mdtype);
 
   void initialize_alignments();
 
@@ -83,8 +85,6 @@ public:
   void record_degenerated_upgrade_to_full();
   void record_explicit_to_concurrent();
   void record_explicit_to_full();
-  void record_implicit_to_concurrent();
-  void record_implicit_to_full();
 
   void record_shutdown();
   bool is_at_shutdown();
@@ -95,5 +95,6 @@ public:
 
   void print_gc_stats(outputStream* out) const;
 };
+
 
 #endif // SHARE_VM_GC_SHENANDOAH_SHENANDOAHCOLLECTORPOLICY_HPP

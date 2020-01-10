@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2018, Red Hat, Inc. All rights reserved.
+ * Copyright (c) 2017, 2018, Red Hat, Inc. and/or its affiliates.
  *
  * This code is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License version 2 only, as
@@ -29,7 +29,6 @@
 #include "gc_implementation/shenandoah/shenandoahStrDedupQueue.inline.hpp"
 #include "gc_implementation/shenandoah/shenandoahStrDedupThread.hpp"
 #include "gc_implementation/shenandoah/shenandoahStringDedup.hpp"
-#include "gc_implementation/shenandoah/shenandoahUtils.hpp"
 
 ShenandoahStrDedupThread::ShenandoahStrDedupThread(ShenandoahStrDedupQueueSet* queues) :
   ConcurrentGCThread(), _queues(queues), _claimed(0) {
@@ -48,9 +47,6 @@ ShenandoahStrDedupThread::~ShenandoahStrDedupThread() {
 }
 
 void ShenandoahStrDedupThread::run() {
-  initialize_in_thread();
-  wait_for_universe_init();
-
   for (;;) {
     ShenandoahStrDedupStats stats;
 
